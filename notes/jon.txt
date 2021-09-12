@@ -1,0 +1,13 @@
+h : height of object
+d : distance from screen to object
+d': distance from user to screen
+h': height of object on screen
+
+h = 100 ft
+d = 500 ft
+d' = 2 ft
+
+h' = h * d' / d
+h' = 100 * 2 / 500
+h' = 2 / 5
+h' = 0.4 ft = 4.8 inches
