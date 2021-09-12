@@ -29,6 +29,11 @@ global const int BLUE_BIT_OFFSET = 0;
 global const int GREEN_BIT_OFFSET = 8;
 global const int RED_BIT_OFFSET = 16;
 
+u32 get_color(u8 red, u8 green, u8 blue) {
+    u32 color = red << RED_BIT_OFFSET | green << GREEN_BIT_OFFSET | blue << BLUE_BIT_OFFSET;
+    return color;
+}
+
 namespace Render {
 
 struct Offscreen_Bitmap_Buffer {
@@ -44,8 +49,8 @@ void draw_weird_gradient(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int
         u32* pixel = (u32*) row;
         for (int x = 0; x < bitmapBuffer->width; ++x) {
 
-            u8 blue = (u8)(x + xOffset);
-            u8 green = (u8)(y + yOffset);
+            u8 blue = (u8)(x - xOffset);
+            u8 green = (u8)(y - yOffset);
             //*pixel = ((green << 0) | (blue << BLUE_BIT_OFFSET));
             //*pixel = ((green << RED_BIT_OFFSET) | (blue << BLUE_BIT_OFFSET));
             *pixel = ((green << GREEN_BIT_OFFSET) | (blue << BLUE_BIT_OFFSET));
@@ -123,15 +128,38 @@ void draw_vertical_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, u32 
 
 void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
 
-    local_persist u32 COLOR_HORIZONTAL = 255 << RED_BIT_OFFSET | 0 << GREEN_BIT_OFFSET | 0 << BLUE_BIT_OFFSET;
-    local_persist u32 COLOR_VERTICAL = 0 << RED_BIT_OFFSET | 255 << GREEN_BIT_OFFSET | 0 << BLUE_BIT_OFFSET;
-    local_persist u32 COLOR_BACKGROUND = 100 << RED_BIT_OFFSET | 100 << GREEN_BIT_OFFSET | 100 << BLUE_BIT_OFFSET;
+    local_persist u32 COLOR_HORIZONTAL = get_color(255, 0, 0);
+    local_persist u32 COLOR_VERTICAL = get_color(0, 255, 0);
+    local_persist u32 COLOR_BACKGROUND = get_color(100, 100, 100);
 
     //Platform::DEBUG_printf("drawing at {%4i, %4i}\n");
 
     fill_color(bitmapBuffer, COLOR_BACKGROUND);
     draw_horizontal_line(bitmapBuffer, yOffset, COLOR_HORIZONTAL);
     draw_vertical_line(bitmapBuffer, xOffset, COLOR_VERTICAL);
+}
+
+void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
+
+    local_persist u32 GRID_SPACING = 40;
+    local_persist u32 COLOR_FG = get_color(0, 255, 0);
+    local_persist u32 COLOR_BG = get_color(0, 0, 0);
+
+    fill_color(bitmapBuffer, COLOR_BG);
+
+    for (int y = yOffset; y < bitmapBuffer->height; y += GRID_SPACING) {
+        draw_horizontal_line(bitmapBuffer, y, COLOR_FG);
+    }
+    for (int y = yOffset; y >= 0; y -= GRID_SPACING) {
+        draw_horizontal_line(bitmapBuffer, y, COLOR_FG);
+    }
+
+    for (int x = xOffset; x < bitmapBuffer->width; x += GRID_SPACING) {
+        draw_vertical_line(bitmapBuffer, x, COLOR_FG);
+    }
+    for (int x = xOffset; x > 0; x -= GRID_SPACING) {
+        draw_vertical_line(bitmapBuffer, x, COLOR_FG);
+    }
 }
 
 struct Button_State {
@@ -153,7 +181,6 @@ struct Keyboard_Input {
     Button_State buttons[BUTTON_COUNT];
 };
 
-// XXX maybe this should be in Game_Input, but I don't know how to handle it when it does the new/old swap
 struct Mouse_Input {
     int x;
     int y;
@@ -172,8 +199,6 @@ struct Memory {
     u64 transientStorageSize;
     void* transientStorage; // should be cleared to zero at startup (For Win32, VirtualAlloc does this)
 };
-
-//global const s16 TONE_VOLUME_DEFAULT = 3000;
 
 void update(Memory* memory, Keyboard_Input* keyboard, Mouse_Input* mouse, Offscreen_Bitmap_Buffer* bitmapBuffer) {
 
@@ -201,7 +226,8 @@ void update(Memory* memory, Keyboard_Input* keyboard, Mouse_Input* mouse, Offscr
 
     //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_test_color_bands(bitmapBuffer);
-    draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
+    //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
+    draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
 }
 
