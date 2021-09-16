@@ -5,9 +5,10 @@
 #define assert(X)
 #endif
 
-#ifdef RENDERDEV_DEBUG_PRINT
+#ifdef RENDERDEV_DEBUG
 namespace Platform {
     void DEBUG_printf(const char* format, ...);
+    void DEBUG_display(const char* format, ...);
 }
 #endif
 
@@ -94,12 +95,18 @@ void fill_color(Offscreen_Bitmap_Buffer* bitmapBuffer, u32 color) {
     }
 }
 
+void fill_pixel(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, u32 color) {
+    u8* row = (u8*) bitmapBuffer->memory;
+    row += bitmapBuffer->pitch * yOffset;
+    u32* pixel = (u32*) row;
+    pixel += xOffset;
+    *pixel = color;
+}
+
 void draw_horizontal_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int yOffset, int xStart, int xEnd, u32 color) {
 
-    // The available memory is only as large as the window.  The mouse position should never be captured outside of the window, but the line position could be left over from previous, and the window was shrunk.  In that case, can't draw the line because it's outside the window and therefore out of bounds of the allocated bitmap buffer.
-    if (yOffset >= bitmapBuffer->height) {
-        return;
-    }
+    if (yOffset >= bitmapBuffer->height) return;
+    if (yOffset < 0) return;
 
     assert(xStart < xEnd);
 
@@ -107,7 +114,7 @@ void draw_horizontal_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int yOf
     if (xEnd >= bitmapBuffer->width) xEnd = bitmapBuffer->width;
 
     u8* row = (u8*) bitmapBuffer->memory;
-    row += yOffset * bitmapBuffer->pitch;
+    row += bitmapBuffer->pitch * yOffset;
     u32* pixel = (u32*) row;
     pixel += xStart;
     for (int x = xStart; x < xEnd; ++x) {
@@ -118,10 +125,9 @@ void draw_horizontal_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int yOf
 
 void draw_vertical_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yStart, int yEnd, u32 color) {
     
-    // See note in game_draw_horizontal_line_segment.  Would exceed bitmap buffer size.
-    if (xOffset >= bitmapBuffer->width) { // xOffset starts at 0, so == width is invalid
-        return;
-    }
+    // xOffset starts at 0, so == width is invalid
+    if (xOffset >= bitmapBuffer->width) return;
+    if (xOffset < 0) return;
 
     assert(yStart < yEnd);
 
@@ -139,28 +145,26 @@ void draw_vertical_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffs
     }
 }
 
-void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
+void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, int hairLength) {
 
     local_persist u32 COLOR_HORIZONTAL = get_color(255, 0, 0);
     local_persist u32 COLOR_VERTICAL = get_color(0, 255, 0);
-    local_persist u32 COLOR_BACKGROUND = get_color(0, 0, 0);
+    //local_persist u32 COLOR_BACKGROUND = get_color(0, 0, 0);
 
     //Platform::DEBUG_printf("drawing at {%4i, %4i}\n");
 
-    fill_color(bitmapBuffer, COLOR_BACKGROUND);
-    //draw_horizontal_line_segment(bitmapBuffer, yOffset, 0, bitmapBuffer->width-1, COLOR_HORIZONTAL);
-    //draw_vertical_line_segment(bitmapBuffer, xOffset, 0, bitmapBuffer->height-1, COLOR_VERTICAL);
-    draw_horizontal_line_segment(bitmapBuffer, yOffset, xOffset - 100, xOffset + 100, COLOR_HORIZONTAL);
-    draw_vertical_line_segment(bitmapBuffer, xOffset, yOffset - 100, yOffset + 100, COLOR_VERTICAL);
+    //fill_color(bitmapBuffer, COLOR_BACKGROUND);
+    draw_horizontal_line_segment(bitmapBuffer, yOffset, xOffset - hairLength, xOffset + hairLength, COLOR_HORIZONTAL);
+    draw_vertical_line_segment(bitmapBuffer, xOffset, yOffset - hairLength, yOffset + hairLength, COLOR_VERTICAL);
 }
 
 void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
 
     local_persist u32 GRID_SPACING = 40;
     local_persist u32 COLOR_FG = get_color(0, 255, 0);
-    local_persist u32 COLOR_BG = get_color(0, 0, 0);
+    //local_persist u32 COLOR_BG = get_color(0, 0, 0);
 
-    fill_color(bitmapBuffer, COLOR_BG);
+    //fill_color(bitmapBuffer, COLOR_BG);
 
     for (int y = yOffset; y < bitmapBuffer->height; y += GRID_SPACING) {
         draw_horizontal_line_segment(bitmapBuffer, y, 0, bitmapBuffer->width-1, COLOR_FG);
@@ -186,9 +190,9 @@ struct Rectangle {
     //u32 fill_color;
 };
 
-void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Rectangle* rect) {
-    local_persist u32 COLOR_BG = get_color(60, 60, 60);
-    fill_color(bitmapBuffer, COLOR_BG);
+void draw_rect_old(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
+    //local_persist u32 COLOR_BG = get_color(60, 60, 60);
+    //fill_color(bitmapBuffer, COLOR_BG);
 
     local_persist u16 RECT_SIZE = 40;
     local_persist u32 COLOR_FG = get_color(120, 200, 255);
@@ -199,34 +203,64 @@ void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, 
 
 }
 
+void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Rectangle* rect) {
+    int x0 = rect->x + xOffset;
+    int x1 = rect->x + xOffset + rect->w;
+    int y0 = rect->y + yOffset;
+    int y1 = rect->y + yOffset + rect->h;
+    draw_horizontal_line_segment(bitmapBuffer, y0, x0, x1, rect->border_color); // top
+    draw_horizontal_line_segment(bitmapBuffer, y1, x0, x1, rect->border_color); // bottom
+    draw_vertical_line_segment  (bitmapBuffer, x0, y0, y1, rect->border_color); // left
+    draw_vertical_line_segment  (bitmapBuffer, x1, y0, y1, rect->border_color); // right
+}
+
+struct Vector2 {
+    int x;
+    int y;
+};
+
 struct Button_State {
     int halfTransistionCount;
     bool endedDown;
+    bool changed;
 };
 
-enum Button_Index {
-   BUTTON_UP,
-   BUTTON_DOWN,
-   BUTTON_LEFT,
-   BUTTON_RIGHT,
+enum Keyboard_Button_Index {
+   KEYBOARD_BUTTON_UP,
+   KEYBOARD_BUTTON_DOWN,
+   KEYBOARD_BUTTON_LEFT,
+   KEYBOARD_BUTTON_RIGHT,
 
-   BUTTON_COUNT
+   KEYBOARD_BUTTON_COUNT
 };
 
 struct Keyboard_Input {
     bool isConnected;
-    Button_State buttons[BUTTON_COUNT];
+    Button_State buttons[KEYBOARD_BUTTON_COUNT];
+};
+
+enum Mouse_Button_Index {
+    MOUSE_BUTTON_LEFT,
+    MOUSE_BUTTON_MIDDLE,
+    MOUSE_BUTTON_RIGHT,
+
+    MOUSE_BUTTON_COUNT
+};
+
+struct Mouse_Cursor {
+    Vector2 position;
+    Vector2 change;
 };
 
 struct Mouse_Input {
-    int x;
-    int y;
-    bool isButtonPressed; // any button on the mouse, for now
+    Mouse_Cursor cursor;
+    Button_State buttons[MOUSE_BUTTON_COUNT];
 };
 
 struct State {
     int xOffset;
     int yOffset;
+    bool mouseDragging;
 };
 
 struct Memory {
@@ -237,26 +271,84 @@ struct Memory {
     void* transientStorage; // should be cleared to zero at startup (For Win32, VirtualAlloc does this)
 };
 
-void update(Memory* memory, Keyboard_Input* keyboard, Mouse_Input* mouse, Offscreen_Bitmap_Buffer* bitmapBuffer) {
+struct Crosshair {
+    int x;
+    int y;
+};
+
+struct Input {
+    Keyboard_Input keyboard;
+    Mouse_Input mouse;
+};
+
+void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer) {
 
     assert(sizeof(State) <= memory->permanentStorageSize);
     State* state = (State*) memory->permanentStorage;
+    local_persist Rectangle* rect = 0;
+    local_persist Crosshair* next_ch = 0;
+    local_persist Crosshair* first_ch = 0;
+    local_persist u32 num_ch = 0;
     if (!memory->isInitialized) {
 
-        Rectangle* rect = (Rectangle*) memory->permanentStorage;
-        rect->x = 100;
-        rect->y = 500;
-        rect->w = 400;
-        rect->h = 120;
-        rect->border_color = get_color(255, 0, 0);
+        u8* p = (u8*) memory->permanentStorage;
+        p += sizeof(State);
+
+        rect = (Rectangle*) p;
+        p += sizeof(Rectangle);
+
+        rect->x = 400;
+        rect->y = 100;
+        rect->w = 20;
+        rect->h = 75;
+        rect->border_color = get_color(222, 126, 45);
+
+        next_ch = (Crosshair*) p;
+        first_ch = next_ch;
 
         memory->isInitialized = true;
     }
 
-    if (mouse->isButtonPressed) {
-        state->xOffset = mouse->x;
-        state->yOffset = mouse->y;
-    } else {
+#if 0
+    {
+        Platform::DEBUG_display("mouse pressed [%d -> %d]    drag start [%d %d]    drag end [%d %d]    offset [%d %d]",
+            state->wasMousePressed, mouse->isButtonPressed,
+            state->mouseDragStart.x, state->mouseDragStart.y,
+            state->mouseDragEnd.x, state->mouseDragEnd.y,
+            state->xOffset, state->yOffset);
+    }
+#endif
+
+    local_persist u32 COLOR_BG = get_color(60, 60, 60);
+    fill_color(bitmapBuffer, COLOR_BG);
+
+    Mouse_Cursor* cursor = &input->mouse.cursor;
+
+    //for (int i = 0; i < arrayCount(input->mouse.buttons); ++i) {
+    {
+        int i = MOUSE_BUTTON_LEFT; // XXX harcode for now. might break with multiple buttons being able to control drag start/stop
+
+        Button_State* button = &input->mouse.buttons[i];
+
+        if (button->changed && button->endedDown) {
+            next_ch->x = cursor->position.x;
+            next_ch->y = cursor->position.y;
+            ++num_ch;
+            ++next_ch;
+        }
+
+        if (button->changed) {
+            state->mouseDragging = button->endedDown;
+        }
+    }
+
+    if (state->mouseDragging) {
+        state->xOffset += cursor->change.x;
+        state->yOffset += cursor->change.y;
+    }
+
+#if 0
+    {
         if (keyboard->buttons[BUTTON_UP].endedDown) {
             state->yOffset -= 1;
         } else if (keyboard->buttons[BUTTON_DOWN].endedDown) {
@@ -267,13 +359,20 @@ void update(Memory* memory, Keyboard_Input* keyboard, Mouse_Input* mouse, Offscr
             state->xOffset += 1;
         }
     }
+#endif
 
     //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_test_color_bands(bitmapBuffer);
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
-    draw_rect(bitmapBuffer, state->xOffset + 20, state->yOffset + 40, (Rectangle*) memory->permanentStorage);
+    Crosshair* ch = first_ch;
+    for (u32 i = 0; i < num_ch; ++i) {
+        draw_crosshair(bitmapBuffer, ch->x, ch->y, 20);
+        ++ch;
+    }
+
+    draw_rect(bitmapBuffer, state->xOffset, state->yOffset, rect);
 
     // TODO draw arbitrary points, then preserve their position while panning
 
