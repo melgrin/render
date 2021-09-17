@@ -25,6 +25,8 @@ namespace Platform {
 #define gigabytes(X) (megabytes(X)*1024)
 #define terabytes(X) (gigabytes(X)*1024)
 
+#include <stdlib.h> // rand
+
 // I think this might only be for Win32, in which case it should go in win32.cpp, which should provide a platform color value creation function.
 global const int BLUE_BIT_OFFSET = 0;
 global const int GREEN_BIT_OFFSET = 8;
@@ -261,6 +263,8 @@ struct State {
     int xOffset;
     int yOffset;
     bool mouseDragging;
+    Rectangle* rectangles;
+    int rectanglesCount;
 };
 
 struct Memory {
@@ -285,7 +289,6 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
 
     assert(sizeof(State) <= memory->permanentStorageSize);
     State* state = (State*) memory->permanentStorage;
-    local_persist Rectangle* rect = 0;
     local_persist Crosshair* next_ch = 0;
     local_persist Crosshair* first_ch = 0;
     local_persist u32 num_ch = 0;
@@ -294,14 +297,20 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         u8* p = (u8*) memory->permanentStorage;
         p += sizeof(State);
 
-        rect = (Rectangle*) p;
-        p += sizeof(Rectangle);
+        u32 rect_color = get_color(222, 126, 45);
 
-        rect->x = 400;
-        rect->y = 100;
-        rect->w = 20;
-        rect->h = 75;
-        rect->border_color = get_color(222, 126, 45);
+        state->rectangles = (Rectangle*) p;
+        state->rectanglesCount = 20;
+        for (int i = 0; i < state->rectanglesCount; ++i) {
+            Rectangle* rect = ((Rectangle*) p) + i;
+
+            rect->x = rand() % 1000;
+            rect->y = rand() % 500;
+            rect->w = rand() % 100 + 1;
+            rect->h = rand() % 100 + 1;
+            rect->border_color = rect_color;
+        }
+        p += sizeof(Rectangle) * state->rectanglesCount;
 
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
@@ -319,8 +328,6 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
-    local_persist u32 COLOR_BG = get_color(60, 60, 60);
-    fill_color(bitmapBuffer, COLOR_BG);
 
     Mouse_Cursor* cursor = &input->mouse.cursor;
 
@@ -366,13 +373,18 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
+    local_persist u32 COLOR_BG = get_color(60, 60, 60);
+    fill_color(bitmapBuffer, COLOR_BG);
+
     Crosshair* ch = first_ch;
     for (u32 i = 0; i < num_ch; ++i) {
         draw_crosshair(bitmapBuffer, ch->x, ch->y, 20);
         ++ch;
     }
 
-    draw_rect(bitmapBuffer, state->xOffset, state->yOffset, rect);
+    for (int i = 0; i < state->rectanglesCount; ++i) {
+        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
+    }
 
     // TODO draw arbitrary points, then preserve their position while panning
 
