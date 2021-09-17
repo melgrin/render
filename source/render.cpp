@@ -320,14 +320,14 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         state->rectanglesCount = 20;
         srand((int)time(0)); // seed
         for (int i = 0; i < state->rectanglesCount; ++i) {
-            Rectangle* rect = ((Rectangle*) p) + i;
+            Rectangle* rect = (Rectangle*) p;
             rect->x = rand() % 1000;
             rect->y = rand() % 500;
             rect->w = rand() % 100 + 1;
             rect->h = rand() % 100 + 1;
             rect->border_color = rect_color;
+            p += sizeof(Rectangle);
         }
-        p += sizeof(Rectangle) * state->rectanglesCount;
 
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
