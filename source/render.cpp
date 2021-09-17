@@ -26,6 +26,7 @@ namespace Platform {
 #define terabytes(X) (gigabytes(X)*1024)
 
 #include <stdlib.h> // rand
+#include <time.h> // time for srand
 
 // I think this might only be for Win32, in which case it should go in win32.cpp, which should provide a platform color value creation function.
 global const int BLUE_BIT_OFFSET = 0;
@@ -98,11 +99,13 @@ void fill_color(Offscreen_Bitmap_Buffer* bitmapBuffer, u32 color) {
 }
 
 void fill_pixel(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, u32 color) {
-    u8* row = (u8*) bitmapBuffer->memory;
-    row += bitmapBuffer->pitch * yOffset;
-    u32* pixel = (u32*) row;
-    pixel += xOffset;
-    *pixel = color;
+    if (xOffset >= 0 && xOffset < bitmapBuffer->width && yOffset >= 0 && yOffset < bitmapBuffer->height) {
+        u8* row = (u8*) bitmapBuffer->memory;
+        row += bitmapBuffer->pitch * yOffset;
+        u32* pixel = (u32*) row;
+        pixel += xOffset;
+        *pixel = color;
+    }
 }
 
 void draw_horizontal_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int yOffset, int xStart, int xEnd, u32 color) {
@@ -285,6 +288,20 @@ struct Input {
     Mouse_Input mouse;
 };
 
+int interpolate(Vector2* a, Vector2* b, int x) {
+    //int y = a->y + ((x - a->x) * ((b->y - a->y) / (b->x - a->x)));
+    int y = (a->y * (b->x - x) + b->y * (x - a->x)) / (b->x - a->x);
+    return y;
+}
+
+void draw_interpolated_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Vector2* a, Vector2* b) {
+    u32 color = get_color(255, 255, 255);
+    for (int x = a->x; x <= b->x; ++x) {
+        int y = interpolate(a, b, x);
+        fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, color);
+    }
+}
+
 void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer) {
 
     assert(sizeof(State) <= memory->permanentStorageSize);
@@ -301,9 +318,9 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
 
         state->rectangles = (Rectangle*) p;
         state->rectanglesCount = 20;
+        srand((int)time(0)); // seed
         for (int i = 0; i < state->rectanglesCount; ++i) {
             Rectangle* rect = ((Rectangle*) p) + i;
-
             rect->x = rand() % 1000;
             rect->y = rand() % 500;
             rect->w = rand() % 100 + 1;
@@ -385,6 +402,10 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     for (int i = 0; i < state->rectanglesCount; ++i) {
         draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
     }
+
+    Vector2 start = {10, 40};
+    Vector2 end = {70, 200};
+    draw_interpolated_line(bitmapBuffer, state->xOffset, state->yOffset, &start, &end);
 
     // TODO draw arbitrary points, then preserve their position while panning
 
