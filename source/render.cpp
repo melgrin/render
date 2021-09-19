@@ -25,8 +25,11 @@ namespace Platform {
 #define gigabytes(X) (megabytes(X)*1024)
 #define terabytes(X) (gigabytes(X)*1024)
 
+#define PI 3.14159265
+
 #include <stdlib.h> // rand
 #include <time.h> // time for srand
+#include <math.h> // sin, cos
 
 // I think this might only be for Win32, in which case it should go in win32.cpp, which should provide a platform color value creation function.
 global const int BLUE_BIT_OFFSET = 0;
@@ -45,6 +48,26 @@ struct Offscreen_Bitmap_Buffer {
     int width;
     int height;
     int pitch; // number of bytes composing a row (row-to-row distance)
+};
+
+struct Vector2 {
+    int x;
+    int y;
+};
+
+struct Rectangle {
+    int x;
+    int y;
+    int w;
+    int h;
+    u32 border_color;
+    //u32 fill_color;
+};
+
+struct Line {
+    Vector2 start;
+    Vector2 end;
+    u32 color;
 };
 
 void draw_weird_gradient(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
@@ -186,15 +209,6 @@ void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) 
     }
 }
 
-struct Rectangle {
-    int x;
-    int y;
-    int w;
-    int h;
-    u32 border_color;
-    //u32 fill_color;
-};
-
 void draw_rect_old(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
     //local_persist u32 COLOR_BG = get_color(60, 60, 60);
     //fill_color(bitmapBuffer, COLOR_BG);
@@ -218,11 +232,6 @@ void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, 
     draw_vertical_line_segment  (bitmapBuffer, x0, y0, y1, rect->border_color); // left
     draw_vertical_line_segment  (bitmapBuffer, x1, y0, y1, rect->border_color); // right
 }
-
-struct Vector2 {
-    int x;
-    int y;
-};
 
 struct Button_State {
     int halfTransistionCount;
@@ -268,6 +277,8 @@ struct State {
     bool mouseDragging;
     Rectangle* rectangles;
     int rectanglesCount;
+    Line* lines;
+    int linesCount;
 };
 
 struct Memory {
@@ -288,18 +299,46 @@ struct Input {
     Mouse_Input mouse;
 };
 
-int interpolate(Vector2* a, Vector2* b, int x) {
-    //int y = a->y + ((x - a->x) * ((b->y - a->y) / (b->x - a->x)));
-    int y = (a->y * (b->x - x) + b->y * (x - a->x)) / (b->x - a->x);
+int interpolate(Vector2* a, Vector2* b, int x/*, u32* color*/) {
+    int y;
+    if (a->x == b->x) {
+        // avoid divide by zero
+        //Platform::DEBUG_printf("interpolate: a.x == b.x, returning y = 0\n");
+        //*color = get_color(0, 255, 0);
+        y = 0;
+    } else {
+        // y = a->y + ((x - a->x) * ((b->y - a->y) / (b->x - a->x)));
+        y = (a->y * (b->x - x) + b->y * (x - a->x)) / (b->x - a->x);
+    }
     return y;
 }
 
-void draw_interpolated_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Vector2* a, Vector2* b) {
-    u32 color = get_color(255, 255, 255);
-    for (int x = a->x; x <= b->x; ++x) {
-        int y = interpolate(a, b, x);
-        fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, color);
+void draw_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Line* line) {
+    for (int x = line->start.x; x <= line->end.x; ++x) {
+        int y = interpolate(&line->start, &line->end, x/*, &line->color*/);
+        fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, line->color);
     }
+}
+
+void rotate_point(Vector2* p, int x, int y, f64 angleDegrees) {
+    f64 angleRadians = angleDegrees*PI/180;
+    f64 s = sin(angleRadians);
+    f64 c = cos(angleRadians);
+
+    // translate point back to origin
+    p->x -= x;
+    p->y -= y;
+
+    // rotate point
+    f64 fxnew = p->x * c - p->y * s;
+    f64 fynew = p->x * s + p->y * c;
+
+    int xnew = (int) fxnew; // XXX truncation/size conversion?
+    int ynew = (int) fynew; // XXX truncation/size conversion?
+
+    // translate point back
+    p->x = xnew + x;
+    p->y = ynew + y;
 }
 
 void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer) {
@@ -314,11 +353,12 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         u8* p = (u8*) memory->permanentStorage;
         p += sizeof(State);
 
+        srand((int)time(0)); // seed
+
         u32 rect_color = get_color(222, 126, 45);
 
         state->rectangles = (Rectangle*) p;
         state->rectanglesCount = 20;
-        srand((int)time(0)); // seed
         for (int i = 0; i < state->rectanglesCount; ++i) {
             Rectangle* rect = (Rectangle*) p;
             rect->x = rand() % 1000;
@@ -327,6 +367,20 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             rect->h = rand() % 100 + 1;
             rect->border_color = rect_color;
             p += sizeof(Rectangle);
+        }
+
+        state->lines = (Line*) p;
+        state->linesCount = 5;
+        u32 line_color = get_color(255, 255, 255);
+        for (int i = 0; i < state->linesCount; ++i) {
+            Line* line = (Line*) p;
+            // just some arbitrary placements
+            line->start.x = rand() % 300 + (bitmapBuffer->width / 2);
+            line->start.y = rand() % 300 + (bitmapBuffer->height / 2);
+            line->end.x = rand() % 300 + (bitmapBuffer->width / 2);
+            line->end.y = rand() % 300 + (bitmapBuffer->height / 2);
+            line->color = line_color;
+            p += sizeof(Line);
         }
 
         next_ch = (Crosshair*) p;
@@ -385,6 +439,19 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
+    //XXX
+    {
+        Button_State* button = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
+
+        if (button->changed && button->endedDown) {
+            for (int i = 0; i < state->linesCount; ++i) {
+                Line* line = &state->lines[i];
+                rotate_point(&line->start, input->mouse.cursor.position.x, input->mouse.cursor.position.y, 10);
+                rotate_point(&line->end  , input->mouse.cursor.position.x, input->mouse.cursor.position.y, 10);
+            }
+        }
+    }
+
     //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_test_color_bands(bitmapBuffer);
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
@@ -403,9 +470,13 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
     }
 
-    Vector2 start = {10, 40};
-    Vector2 end = {70, 200};
-    draw_interpolated_line(bitmapBuffer, state->xOffset, state->yOffset, &start, &end);
+    //Vector2 start = {10, 40};
+    //Vector2 end = {70, 200};
+    //draw_interpolated_line(bitmapBuffer, state->xOffset, state->yOffset, &start, &end);
+    for (int i = 0; i < state->linesCount; ++i) {
+        Line* line = &state->lines[i];
+        draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
+    }
 
     // TODO draw arbitrary points, then preserve their position while panning
 
