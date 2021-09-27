@@ -299,7 +299,7 @@ struct Input {
     Mouse_Input mouse;
 };
 
-int interpolate(Vector2* a, Vector2* b, int x/*, u32* color*/) {
+int interpolate(const Vector2* a, const Vector2* b, int x/*, u32* color*/) {
     int y;
     if (a->x == b->x) {
         // avoid divide by zero
@@ -313,10 +313,76 @@ int interpolate(Vector2* a, Vector2* b, int x/*, u32* color*/) {
     return y;
 }
 
-void draw_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Line* line) {
-    for (int x = line->start.x; x <= line->end.x; ++x) {
-        int y = interpolate(&line->start, &line->end, x/*, &line->color*/);
-        fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, line->color);
+void draw_line_old(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, const Line* line) {
+
+    const Vector2* p0;
+    const Vector2* p1;
+    if (line->start.x > line->end.x) {
+        p0 = &line->end;
+        p1 = &line->start;
+    } else {
+        p0 = &line->start;
+        p1 = &line->end;
+    }
+
+    for (int x = p0->x; x <= p1->x; ++x) {
+        int y = interpolate(p0, p1, x/*, &line->color*/);
+        fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, get_color(255, 0, 255) /*line->color*/);
+    }
+}
+
+// http://paulbourke.net/miscellaneous/interpolation/
+// "Linear interpolation is the simplest method of getting values at positions in between the data points. The points are simply joined by straight line segments. Each segment (bounded by two data points) can be interpolated independently. The parameter mu defines where to estimate the value on the interpolated line, it is 0 at the first point and 1 and the second point. For interpolated values between the two points mu ranges between 0 and 1. Values of mu outside this range result in extrapolation."
+// This seems to give the same effect as my original, but at least I understand it a little better.
+f64 linear_interpolate(f64 y1, f64 y2, f64 mu) {
+    f64 result = y1 * (1 - mu) + y2 * mu;
+    return result;
+}
+
+void draw_line_linear_interpolate(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, const Line* line) {
+    {
+        const Vector2* p0;
+        const Vector2* p1;
+
+        if (line->start.x > line->end.x) {
+            p0 = &line->end;
+            p1 = &line->start;
+        } else {
+            p0 = &line->start;
+            p1 = &line->end;
+        }
+
+        int d = p1->x - p0->x;
+
+        for (int x = p0->x; x <= p1->x; ++x) {
+            f64 mu = ((f64) (x - p0->x)) / ((f64) d);
+            f64 yf = linear_interpolate((f64)p0->y, (f64)p1->y, mu);
+            //int y = (int) yf; // XXX truncation/size conversion?
+            int y = (int) (yf + 0.5); // XXX truncation/size conversion?
+            fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, line->color);
+        }
+    }
+    {
+        const Vector2* p0;
+        const Vector2* p1;
+
+        if (line->start.y > line->end.y) {
+            p0 = &line->end;
+            p1 = &line->start;
+        } else {
+            p0 = &line->start;
+            p1 = &line->end;
+        }
+
+        int d = p1->y - p0->y;
+
+        for (int y = p0->y; y <= p1->y; ++y) {
+            f64 mu = ((f64) (y - p0->y)) / ((f64) d);
+            f64 xf = linear_interpolate((f64)p0->x, (f64)p1->x, mu);
+            //int x = (int) xf; // XXX truncation/size conversion?
+            int x = (int) (xf + 0.5); // XXX truncation/size conversion?
+            fill_pixel(bitmapBuffer, x + xOffset, y + yOffset, line->color);
+        }
     }
 }
 
@@ -444,10 +510,12 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         Button_State* button = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
 
         if (button->changed && button->endedDown) {
+            int xAnchor = input->mouse.cursor.position.x - state->xOffset;
+            int yAnchor = input->mouse.cursor.position.y - state->yOffset;
             for (int i = 0; i < state->linesCount; ++i) {
                 Line* line = &state->lines[i];
-                rotate_point(&line->start, input->mouse.cursor.position.x, input->mouse.cursor.position.y, 10);
-                rotate_point(&line->end  , input->mouse.cursor.position.x, input->mouse.cursor.position.y, 10);
+                rotate_point(&line->start, xAnchor, yAnchor, 10);
+                rotate_point(&line->end  , xAnchor, yAnchor, 10);
             }
         }
     }
@@ -475,7 +543,10 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     //draw_interpolated_line(bitmapBuffer, state->xOffset, state->yOffset, &start, &end);
     for (int i = 0; i < state->linesCount; ++i) {
         Line* line = &state->lines[i];
-        draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
+        //draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
+
+        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, line);
+        draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
     }
 
     // TODO draw arbitrary points, then preserve their position while panning
