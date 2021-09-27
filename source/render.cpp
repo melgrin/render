@@ -373,6 +373,42 @@ void draw_line_linear_interpolate(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOf
     }
 }
 
+void draw_rect_using_line_interp(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Rectangle* rect) {
+
+    // TODO? Really makes me think maybe I should do this just with Points/Vector2s.
+
+    Line top, bottom, left, right;
+    top   .color = get_color(255, 255, 255);
+    bottom.color = get_color(255, 255,   0);
+    left  .color = get_color(255,   0, 255);
+    right .color = get_color(  0, 255, 255);
+
+    top.start.x = rect->x;
+    top.start.y = rect->y;
+    top.end  .x = rect->x + rect->w;
+    top.end  .y = rect->y;
+
+    bottom.start.x = rect->x;
+    bottom.start.y = rect->y + rect->h;
+    bottom.end  .x = rect->x + rect->w;
+    bottom.end  .y = rect->y + rect->h;
+
+    left.start.x = rect->x;
+    left.start.y = rect->y;
+    left.end  .x = rect->x;
+    left.end  .y = rect->y + rect->h;
+
+    right.start.x = rect->x + rect->w;
+    right.start.y = rect->y;
+    right.end  .x = rect->x + rect->w;
+    right.end  .y = rect->y + rect->h;
+
+    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, &top);
+    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, &bottom);
+    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, &left);
+    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, &right);
+}
+
 void rotate_point(Vector2* p, int x, int y, f64 angleDegrees) {
     f64 angleRadians = angleDegrees*PI/180;
     f64 s = sin(angleRadians);
@@ -523,6 +559,7 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
 
     for (int i = 0; i < state->rectanglesCount; ++i) {
         draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
+        draw_rect_using_line_interp(bitmapBuffer, state->xOffset + 2, state->yOffset + 2, &state->rectangles[i]);
     }
 
     for (int i = 0; i < state->linesCount; ++i) {
