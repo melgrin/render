@@ -139,13 +139,13 @@ void draw_horizontal_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int yOf
     assert(xStart < xEnd);
 
     if (xStart < 0) xStart = 0;
-    if (xEnd >= bitmapBuffer->width) xEnd = bitmapBuffer->width;
+    if (xEnd >= bitmapBuffer->width) xEnd = bitmapBuffer->width - 1;
 
     u8* row = (u8*) bitmapBuffer->memory;
     row += bitmapBuffer->pitch * yOffset;
     u32* pixel = (u32*) row;
     pixel += xStart;
-    for (int x = xStart; x < xEnd; ++x) {
+    for (int x = xStart; x <= xEnd; ++x) {
         *pixel = color;
         ++pixel;
     }
@@ -160,12 +160,12 @@ void draw_vertical_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffs
     assert(yStart < yEnd);
 
     if (yStart < 0) yStart = 0;
-    if (yEnd >= bitmapBuffer->height) yEnd = bitmapBuffer->height;
+    if (yEnd >= bitmapBuffer->height) yEnd = bitmapBuffer->height - 1;
 
     u8* row = (u8*) bitmapBuffer->memory;
     row += bitmapBuffer->pitch * yStart;
 
-    for (int y = yStart; y < yEnd; ++y) {
+    for (int y = yStart; y <= yEnd; ++y) {
         u32* pixel = (u32*) row;
         pixel += xOffset;
         *pixel = color;
@@ -207,19 +207,6 @@ void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) 
     for (int x = xOffset; x > 0; x -= GRID_SPACING) {
         draw_vertical_line_segment(bitmapBuffer, x, 0, bitmapBuffer->height-1, COLOR_FG);
     }
-}
-
-void draw_rect_old(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
-    //local_persist u32 COLOR_BG = get_color(60, 60, 60);
-    //fill_color(bitmapBuffer, COLOR_BG);
-
-    local_persist u16 RECT_SIZE = 40;
-    local_persist u32 COLOR_FG = get_color(120, 200, 255);
-    draw_horizontal_line_segment(bitmapBuffer, yOffset            , xOffset, xOffset + RECT_SIZE, COLOR_FG); // top
-    draw_horizontal_line_segment(bitmapBuffer, yOffset + RECT_SIZE, xOffset, xOffset + RECT_SIZE, COLOR_FG); // bottom
-    draw_vertical_line_segment  (bitmapBuffer, xOffset            , yOffset, yOffset + RECT_SIZE, COLOR_FG); // left
-    draw_vertical_line_segment  (bitmapBuffer, xOffset + RECT_SIZE, yOffset, yOffset + RECT_SIZE, COLOR_FG); // right
-
 }
 
 void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, Rectangle* rect) {
@@ -538,9 +525,6 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
     }
 
-    //Vector2 start = {10, 40};
-    //Vector2 end = {70, 200};
-    //draw_interpolated_line(bitmapBuffer, state->xOffset, state->yOffset, &start, &end);
     for (int i = 0; i < state->linesCount; ++i) {
         Line* line = &state->lines[i];
         //draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
