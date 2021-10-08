@@ -265,6 +265,10 @@ struct State {
     int rectanglesCount;
     Line* lines;
     int linesCount;
+
+    Line* testLine;
+    bool testLineActive;
+    f32 testLineAngle;
 };
 
 struct Memory {
@@ -428,10 +432,9 @@ void _rotate_point_int_anchors(Vector2* p, int x, int y, f32 angleDegrees) {
 }
 #endif
 
-void rotate_point(Vector2* p, int x, int y, f32 angleDegrees) {
-    f32 angleRadians = angleDegrees*PI32/180.0f;
-    f32 s = sinf(angleRadians);
-    f32 c = cosf(angleRadians);
+void rotate_point(Vector2* p, f32 x, f32 y, f32 theta) {
+    f32 s = sinf(theta);
+    f32 c = cosf(theta);
 
     // translate point back to origin
     p->x -= x;
@@ -499,6 +502,10 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             p += sizeof(Line);
         }
 
+        state->testLine = (Line*) p;
+        state->testLine->color = get_color(255, 200, 200);
+        p += sizeof(Line);
+
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
 
@@ -554,15 +561,17 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
+    // XXX testing mouse rotation, which uses mouse buttons, so removing this for now
+#if 0
     {
         Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
         Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
 
         f32 theta = 0;
         if (left->changed && left->endedDown) {
-            theta -= 10.0f;
+            theta -= PI32/2;
         } else if (right->changed && right->endedDown) { 
-            theta += 10.0f;
+            theta += PI32/2;
         }
 
         if (theta != 0) {
@@ -578,6 +587,32 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
                     rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
                 }
             }
+        }
+    }
+#endif
+
+    //XXX
+    {
+        Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
+        //Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
+
+        if (left->changed && left->endedDown) {
+            // begin line
+            state->testLine->start.x = (f32) (input->mouse.cursor.position.x - state->xOffset);
+            state->testLine->start.y = (f32) (input->mouse.cursor.position.y - state->yOffset);
+            state->testLine->end.x   = (f32) (input->mouse.cursor.position.x - state->xOffset);
+            state->testLine->end.y   = (f32) (input->mouse.cursor.position.y - state->yOffset);
+            state->testLineActive = true;
+            state->testLineAngle = 0; // FIXME need to determine first angle instead of defaulting to 0 (like if click+drag staight up, initial angle is 90 degrees, and rest of rotation operation should be based on that)
+        } else if (left->endedDown) {
+            // continue line
+            if (state->testLineActive) {
+                state->testLine->end.x = (f32) (input->mouse.cursor.position.x - state->xOffset);
+                state->testLine->end.y = (f32) (input->mouse.cursor.position.y - state->yOffset);
+            }
+        } else {
+            // end line
+            state->testLineActive = false;
         }
     }
 
@@ -596,13 +631,46 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 
     for (int i = 0; i < state->rectanglesCount; ++i) {
-        draw_rect(bitmapBuffer, state->xOffset + 4, state->yOffset + 4, &state->rectangles[i]);
+        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, &state->rectangles[i]);
     }
 
     for (int i = 0; i < state->linesCount; ++i) {
         Line* line = &state->lines[i];
         draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, line);
         //draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
+    }
+
+    if (state->testLineActive) {
+        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, state->testLine);
+        
+        f32 x = state->testLine->end.x - state->testLine->start.x;
+        f32 y = state->testLine->end.y - state->testLine->start.y;
+        //y = y * -1; // convert from left-handed to right-handed coordinate system (bitmapBuffer y offset values increase when going down from top)
+        f32 angle = atan2f(y,x);
+        if (y < 0) angle += 2*PI32;
+        f32 degrees = angle * 180.0f / PI32;
+        Platform::DEBUG_display("mouse angle: %.2f", degrees);
+
+        f32 theta = angle - state->testLineAngle;
+        if (theta != 0) {
+            f32 xAnchor = state->testLine->start.x; // - state->xOffset;
+            f32 yAnchor = state->testLine->start.y; // - state->yOffset;
+            for (int i = 0; i < state->linesCount; ++i) {
+                Line* line = &state->lines[i];
+                rotate_point(&line->start, xAnchor, yAnchor, theta);
+                rotate_point(&line->end  , xAnchor, yAnchor, theta);
+            }
+            for (int i = 0; i < state->rectanglesCount; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
+                }
+            }
+        }
+
+        state->testLineAngle = angle;
+
+    } else {
+        Platform::DEBUG_display("");
     }
 
 }
