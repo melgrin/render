@@ -267,8 +267,9 @@ struct State {
     int linesCount;
 
     Line* testLine;
-    bool testLineActive;
     f32 testLineAngle;
+    bool testLineActive;
+    bool testLineRotationActive;
 };
 
 struct Memory {
@@ -591,6 +592,7 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
+
     //XXX
     {
         Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
@@ -603,7 +605,7 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             state->testLine->end.x   = (f32) (input->mouse.cursor.position.x - state->xOffset);
             state->testLine->end.y   = (f32) (input->mouse.cursor.position.y - state->yOffset);
             state->testLineActive = true;
-            state->testLineAngle = 0; // FIXME need to determine first angle instead of defaulting to 0 (like if click+drag staight up, initial angle is 90 degrees, and rest of rotation operation should be based on that)
+            state->testLineRotationActive = false;
         } else if (left->endedDown) {
             // continue line
             if (state->testLineActive) {
@@ -641,33 +643,51 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 
     if (state->testLineActive) {
-        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, state->testLine);
+
         
         f32 x = state->testLine->end.x - state->testLine->start.x;
         f32 y = state->testLine->end.y - state->testLine->start.y;
         //y = y * -1; // convert from left-handed to right-handed coordinate system (bitmapBuffer y offset values increase when going down from top)
+        f32 length = sqrtf(powf(x,2) + powf(y,2));
+
         f32 angle = atan2f(y,x);
         if (y < 0) angle += 2*PI32;
-        f32 degrees = angle * 180.0f / PI32;
-        Platform::DEBUG_display("mouse angle: %.2f", degrees);
 
-        f32 theta = angle - state->testLineAngle;
-        if (theta != 0) {
-            f32 xAnchor = state->testLine->start.x; // - state->xOffset;
-            f32 yAnchor = state->testLine->start.y; // - state->yOffset;
-            for (int i = 0; i < state->linesCount; ++i) {
-                Line* line = &state->lines[i];
-                rotate_point(&line->start, xAnchor, yAnchor, theta);
-                rotate_point(&line->end  , xAnchor, yAnchor, theta);
-            }
-            for (int i = 0; i < state->rectanglesCount; ++i) {
-                for (int j = 0; j < 4; ++j) {
-                    rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
+        bool prevRotationActive = state->testLineRotationActive;
+        local_persist const f32 TEST_LINE_DEAD_ZONE = 10;
+        state->testLineRotationActive = length >= TEST_LINE_DEAD_ZONE;
+        if (!prevRotationActive && state->testLineRotationActive) {
+            state->testLineAngle = angle;
+        }
+
+        if (state->testLineRotationActive) {
+
+            f32 theta = angle - state->testLineAngle;
+            Platform::DEBUG_display("mouse angle: %.2f, length: %.2f, prev: %.2f, theta: %.2f",
+                angle*180/PI32, length, state->testLineAngle*180/PI32, theta*180/PI32);
+            if (theta != 0 && state->testLineAngle != angle) {
+                f32 xAnchor = state->testLine->start.x; // - state->xOffset;
+                f32 yAnchor = state->testLine->start.y; // - state->yOffset;
+                for (int i = 0; i < state->linesCount; ++i) {
+                    Line* line = &state->lines[i];
+                    rotate_point(&line->start, xAnchor, yAnchor, theta);
+                    rotate_point(&line->end  , xAnchor, yAnchor, theta);
+                }
+                for (int i = 0; i < state->rectanglesCount; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
+                    }
                 }
             }
+        } else {
+            Platform::DEBUG_display("mouse angle: %.2f, length: %.2f",
+                angle*180/PI32, length);
         }
 
         state->testLineAngle = angle;
+
+        state->testLine->color = state->testLineRotationActive ? get_color(0, 255, 0) : get_color(255, 0, 0);
+        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, state->testLine);
 
     } else {
         Platform::DEBUG_display("");
