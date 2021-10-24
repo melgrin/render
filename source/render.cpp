@@ -1,3 +1,7 @@
+// TODO
+// - zoom
+// - circle/oval
+// - ??
 
 #ifdef RENDERDEV_ASSERT
 #define assert(X) if (!(X)) { *(int*)0 = 0; }
@@ -252,9 +256,16 @@ struct Mouse_Cursor {
     Vector2i change;
 };
 
+struct Mouse_Wheel {
+    int delta;
+    Vector2i position;
+    //int modifier;
+};
+
 struct Mouse_Input {
     Mouse_Cursor cursor;
     Button_State buttons[MOUSE_BUTTON_COUNT];
+    Mouse_Wheel wheel;
 };
 
 struct State {
@@ -453,6 +464,27 @@ void rotate_point(Vector2* p, f32 x, f32 y, f32 theta) {
     p->y = ynew + y;
 }
 
+void scale_point(Vector2* p, int xOffset, int yOffset, int xMouse, int yMouse, int scrollFactor) {
+    //p->x = p->x - xOffset + scrollFactor;
+    //p->y = p->y - yOffset + scrollFactor;
+    //p->x = p->x + scrollFactor * 10;
+    //p->y = p->y + scrollFactor * 10;
+
+    //f32 diff = f32(mouse) - p.x;
+    //f32 direction = diff / abs(diff);
+    //p.x += diff * 10;
+    //if (mouse - p > 0) ++;
+    //else if (mouse - p < 0) --;
+
+    int xScroll = scrollFactor * 10;
+    int yScroll = scrollFactor * 10;
+    if (xMouse > p->x) xScroll *= -1;
+    if (yMouse > p->y) yScroll *= -1;
+
+    p->x += xScroll;
+    p->y += yScroll;
+}
+
 void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer) {
 
     assert(sizeof(State) <= memory->permanentStorageSize);
@@ -640,6 +672,23 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         Line* line = &state->lines[i];
         draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, line);
         //draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
+    }
+
+    if (input->mouse.wheel.delta != 0) {
+        //Platform::DEBUG_printf("mouse wheel delta: %d\n", input->mouse.wheel.delta);
+        for (int i = 0; i < state->rectanglesCount; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                scale_point(&state->rectangles[i].points[j],
+                    state->xOffset,
+                    state->yOffset,
+                    input->mouse.cursor.position.x,
+                    input->mouse.cursor.position.y,
+                    input->mouse.wheel.delta);
+                    //TODO
+                    //input->mouse.wheel.position.x - xOffset,
+                    //input->mouse.wheel.position.y - yOffset);
+            }
+        }
     }
 
     if (state->testLineActive) {

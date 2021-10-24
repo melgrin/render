@@ -226,6 +226,18 @@ bool process_pending_messages(Render::Input* input) {
                 break;
             }
 
+            case WM_MOUSEWHEEL: {
+                int delta = GET_WHEEL_DELTA_WPARAM(message.wParam) / WHEEL_DELTA;
+                int modifierKey = GET_KEYSTATE_WPARAM(message.wParam);
+                int x = GET_X_LPARAM(message.lParam);
+                int y = GET_Y_LPARAM(message.lParam);
+                //Platform::DEBUG_printf("delta = %d, x = %d, y = %d, modifier key = %d\n", delta, x, y, modifierKey);
+                input->mouse.wheel.delta += delta;
+                input->mouse.wheel.position.x = x;
+                input->mouse.wheel.position.y = y;
+                break;
+            }
+
             case WM_SIZE: {
                 assert(!"got here somehow");
                 break;
