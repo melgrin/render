@@ -280,8 +280,15 @@ struct State {
     Line* testLine;
     f32 testLineAngle;
     f32 testLineInitialAngle;
+    f32 testLineAnglePrevious;
     bool testLineActive;
-    bool testLineRotationActive;
+    bool rotationActive;
+    bool rotationActivePrevious;
+
+    f32 rotationAngle;
+    f32 previousTheta;
+    f32 xRotationOriginPrevious;
+    f32 yRotationOriginPrevious;
 };
 
 struct Memory {
@@ -347,11 +354,8 @@ void rotate_point(Vector2* p, f32 x, f32 y, f32 theta) {
     p->y -= y;
 
     // rotate point
-    f32 fxnew = p->x * c - p->y * s;
-    f32 fynew = p->x * s + p->y * c;
-
-    f32 xnew = fxnew;
-    f32 ynew = fynew;
+    f32 xnew = p->x * c - p->y * s;
+    f32 ynew = p->x * s + p->y * c;
 
     // translate point back
     p->x = xnew + x;
@@ -648,7 +652,7 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             state->testLine->end.x   = (f32) (input->mouse.cursor.position.x - state->xOffset);
             state->testLine->end.y   = (f32) (input->mouse.cursor.position.y - state->yOffset);
             state->testLineActive = true;
-            state->testLineRotationActive = false;
+            state->rotationActive = false;
         } else if (left->endedDown) {
             // continue line
             if (state->testLineActive) {
@@ -671,15 +675,15 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         f32 angle = atan2f(y,x);
         if (y < 0) angle += 2*PI32;
 
-        bool prevRotationActive = state->testLineRotationActive;
         local_persist const f32 TEST_LINE_DEAD_ZONE = 50;
-        state->testLineRotationActive = length >= TEST_LINE_DEAD_ZONE;
-        if (!prevRotationActive && state->testLineRotationActive) {
+        bool prevRotationActive = state->rotationActive;
+        state->rotationActive = length >= TEST_LINE_DEAD_ZONE;
+        if (!prevRotationActive && state->rotationActive) {
             //state->testLineAngle = angle;
             state->testLineInitialAngle = angle;
         }
 
-        //if (state->testLineRotationActive) {
+        //if (state->rotationActive) {
         //    f32 theta = angle - state->testLineAngle;
         //    Platform::DEBUG_display("mouse angle: %.2f, length: %.2f, prev: %.2f, theta: %.2f",
         //        angle*180/PI32, length, state->testLineAngle*180/PI32, theta*180/PI32);
@@ -703,11 +707,12 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         //}
 
         state->testLineAngle = angle; // XXX why is this here and also above in the conditional?
-        state->testLine->color = state->testLineRotationActive ? get_color(0, 255, 0) : get_color(255, 0, 0);
-        Platform::DEBUG_display("mouse angle: %.2f", angle*180/PI32);
+        state->testLine->color = state->rotationActive ? get_color(0, 255, 0) : get_color(255, 0, 0);
+        //Platform::DEBUG_display("mouse angle: %.2f", angle*180/PI32);
 
     } else {
-        Platform::DEBUG_display("");
+        //Platform::DEBUG_display("");
+        state->rotationActive = false;
     }
 
     //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
@@ -715,12 +720,59 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
-    f32 theta;
-    if (state->testLineRotationActive) {
-        theta = state->testLineAngle - state->testLineInitialAngle;
-    } else {
-        theta = 0;
+    //f32 theta;
+    ////f32 rotationAngleDelta;
+    //if (state->rotationActive) {
+    //    theta = state->testLineAngle - state->testLineInitialAngle;
+    //    //rotationAngleDelta = theta - state->testLineAnglePrevious;
+    //} else {
+    //    theta = state->previousTheta;
+    //    //rotationAngleDelta = 0;
+    //}
+
+    if (state->rotationActive) {
+        // get angle of line
+        // get angle of line from previous update
+        // get the delta between the two
+        // add the delta to the running total rotation angle
+        // pass that total rotation angle into all of the functions to do the rotations
+
+        //f32 delta = current - previous;
+
+        f32 current = state->testLineAngle;
+        f32 previous = state->rotationActivePrevious ? state->testLineAnglePrevious : state->testLineInitialAngle;
+
+        f32 delta = current - previous;
+        if      (delta >  PI32) { delta = PI32*2 - delta; }
+        else if (delta < -PI32) { delta = PI32*2 + delta; }
+
+        state->rotationAngle += delta;
+
+        state->testLineAnglePrevious = current;
+
     }
+
+    Platform::DEBUG_display("current %.2f, rotate %.2f, active %d",
+        state->testLineAngle*180/PI32,
+        state->rotationAngle*180/PI32,
+        state->rotationActive);
+
+    f32 theta = state->rotationAngle; // XXX
+
+    f32 xRotationOrigin;
+    f32 yRotationOrigin;
+    //if (state->rotationActive) {
+    //    xRotationOrigin = state->testLine->start.x;
+    //    yRotationOrigin = state->testLine->start.y;
+    //} else {
+    //    xRotationOrigin = state->xRotationOriginPrevious;
+    //    yRotationOrigin = state->yRotationOriginPrevious;
+    //}
+    xRotationOrigin = state->testLine->start.x;
+    yRotationOrigin = state->testLine->start.y;
+
+    //state->rotationAngle += rotationAngleDelta;
+    //Platform::DEBUG_display("angle: %.2f", state->rotationAngle*180/PI32);
 
     local_persist u32 COLOR_BG = get_color(60, 60, 60);
     fill_color(bitmapBuffer, COLOR_BG);
@@ -732,12 +784,12 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 
     for (int i = 0; i < state->rectanglesCount; ++i) {
-        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, theta, state->testLine->start.x, state->testLine->start.y, &state->rectangles[i]);
+        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, theta, xRotationOrigin, yRotationOrigin, &state->rectangles[i]);
     }
 
     for (int i = 0; i < state->linesCount; ++i) {
         Line* line = &state->lines[i];
-        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, theta, state->testLine->start.x, state->testLine->start.y, line);
+        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, theta, xRotationOrigin, yRotationOrigin, line);
         //draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, line);
         //draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
     }
@@ -766,6 +818,13 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
+    state->rotationActivePrevious = state->rotationActive;
+    state->previousTheta = theta;
+
+    if (state->rotationActive) {
+        state->xRotationOriginPrevious = xRotationOrigin;
+        state->yRotationOriginPrevious = yRotationOrigin;
+    }
 
 }
 
