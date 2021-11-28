@@ -187,19 +187,6 @@ void draw_vertical_line_segment(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffs
     }
 }
 
-void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, int hairLength) {
-
-    local_persist u32 COLOR_HORIZONTAL = get_color(255, 0, 0);
-    local_persist u32 COLOR_VERTICAL = get_color(0, 255, 0);
-    //local_persist u32 COLOR_BACKGROUND = get_color(0, 0, 0);
-
-    //Platform::DEBUG_printf("drawing at {%4i, %4i}\n");
-
-    //fill_color(bitmapBuffer, COLOR_BACKGROUND);
-    draw_horizontal_line_segment(bitmapBuffer, yOffset, xOffset - hairLength, xOffset + hairLength, COLOR_HORIZONTAL);
-    draw_vertical_line_segment(bitmapBuffer, xOffset, yOffset - hairLength, yOffset + hairLength, COLOR_VERTICAL);
-}
-
 void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
 
     local_persist u32 GRID_SPACING = 40;
@@ -271,24 +258,13 @@ struct Mouse_Input {
 struct State {
     int xOffset;
     int yOffset;
+    f32 rotationAngle;
     bool mouseDragging;
     Rectangle* rectangles;
     int rectanglesCount;
     Line* lines;
     int linesCount;
 
-    Line* testLine;
-    f32 testLineAngle;
-    f32 testLineInitialAngle;
-    f32 testLineAnglePrevious;
-    bool testLineActive;
-    bool rotationActive;
-    bool rotationActivePrevious;
-
-    f32 rotationAngle;
-    f32 previousTheta;
-    f32 xRotationOriginPrevious;
-    f32 yRotationOriginPrevious;
 };
 
 struct Memory {
@@ -342,7 +318,7 @@ void draw_line_old(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffs
 }
 #endif
 
-void rotate_point(Vector2* p, f32 x, f32 y, f32 theta) {
+void rotate_point(Vector2* p, int x, int y, f32 theta) {
 
     if (theta == 0) return;
 
@@ -374,7 +350,7 @@ f64 linear_interpolate(f64 y1, f64 y2, f64 mu) {
     return result;
 }
 
-void draw_line_linear_interpolate(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, f32 xRotationOrigin, f32 yRotationOrigin, const Line* line) {
+void draw_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, int xRotationOrigin, int yRotationOrigin, const Line* line) {
 
     Line lineR = *line;
     rotate_point(&lineR.start, xRotationOrigin, yRotationOrigin, theta);
@@ -428,7 +404,7 @@ void draw_line_linear_interpolate(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOf
     }
 }
 
-void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, f32 xRotationOrigin, f32 yRotationOrigin, Rectangle* rect) {
+void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, int xRotationOrigin, int yRotationOrigin, Rectangle* rect) {
     
     Line top, bottom, left, right;
     top   .color = get_color(255, 255, 255);
@@ -448,34 +424,33 @@ void draw_rect(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, 
     right.start = rect->ne;
     right.end   = rect->se;
 
-    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &top);
-    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &bottom);
-    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &left);
-    draw_line_linear_interpolate(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &right);
+    draw_line(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &top);
+    draw_line(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &bottom);
+    draw_line(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &left);
+    draw_line(bitmapBuffer, xOffset, yOffset, theta, xRotationOrigin, yRotationOrigin, &right);
 }
 
-#if 0
-void _rotate_point_int_anchors(Vector2* p, int x, int y, f32 angleDegrees) {
-    f32 angleRadians = angleDegrees*PI32/180.0f;
-    f32 s = sin(angleRadians);
-    f32 c = cos(angleRadians);
+void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int x, int y, int length, u32 color) {
 
-    // translate point back to origin
-    p->x -= x;
-    p->y -= y;
+    Line v, h;
+    int l = length/2;
 
-    // rotate point
-    f32 fxnew = p->x * c - p->y * s;
-    f32 fynew = p->x * s + p->y * c;
+    h.start.x = f32(x - l);
+    h.end  .x = f32(x + l);
+    h.start.y = f32(y);
+    h.end  .y = f32(y);
 
-    int xnew = (int) (fxnew + 0.5); // XXX truncation/size conversion?
-    int ynew = (int) (fynew + 0.5); // XXX truncation/size conversion?
+    v.start.x = f32(x);
+    v.end  .x = f32(x);
+    v.start.y = f32(y - l);
+    v.end  .y = f32(y + l);
 
-    // translate point back
-    p->x = xnew + x;
-    p->y = ynew + y;
+    v.color = color;
+    h.color = color;
+
+    draw_line(bitmapBuffer, 0, 0, 0, 0, 0, &v);
+    draw_line(bitmapBuffer, 0, 0, 0, 0, 0, &h);
 }
-#endif
 
 #if ZOOM
 void scale_point(Vector2* p, int xOffset, int yOffset, int xMouse, int yMouse, int scrollFactor) {
@@ -550,10 +525,6 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             p += sizeof(Line);
         }
 
-        state->testLine = (Line*) p;
-        state->testLine->color = get_color(255, 200, 200);
-        p += sizeof(Line);
-
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
 
@@ -590,9 +561,39 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         }
     }
 
+    f32 thetaFromMouseButtons = 0;
+    {
+        Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
+        Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
+
+        local_persist const f32 STEP = 10.0f * PI32/180.0f;
+        if (left->changed && left->endedDown) {
+            thetaFromMouseButtons -= STEP;
+        }
+        if (right->changed && right->endedDown) { 
+            thetaFromMouseButtons += STEP;
+        }
+    }
+    state->rotationAngle += thetaFromMouseButtons;
+    Platform::DEBUG_display("rotate %.2f", state->rotationAngle*180/PI32);
+
+
     if (state->mouseDragging) {
-        state->xOffset += cursor->change.x;
-        state->yOffset += cursor->change.y;
+        // old version that panned wrong at any non-zero rotationAngle
+        //state->xOffset += cursor->change.x;
+        //state->yOffset += cursor->change.y;
+
+        f32 s = sinf(state->rotationAngle * -1.0f);
+        f32 c = cosf(state->rotationAngle * -1.0f);
+
+        f32 x = f32(cursor->change.x);
+        f32 y = f32(cursor->change.y);
+
+        f32 dx = x * c - y * s;
+        f32 dy = x * s + y * c;
+
+        state->xOffset += int(dx); // XXX f32?
+        state->yOffset += int(dy); // XXX f32?
     }
 
 #if 0
@@ -609,194 +610,40 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
-    // XXX testing mouse rotation, which uses mouse buttons, so removing this for now
-#if 0
-    {
-        Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
-        Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
-
-        f32 theta = 0;
-        if (left->changed && left->endedDown) {
-            theta -= PI32/2;
-        } else if (right->changed && right->endedDown) { 
-            theta += PI32/2;
-        }
-
-        if (theta != 0) {
-            int xAnchor = input->mouse.cursor.position.x - state->xOffset;
-            int yAnchor = input->mouse.cursor.position.y - state->yOffset;
-            for (int i = 0; i < state->linesCount; ++i) {
-                Line* line = &state->lines[i];
-                rotate_point(&line->start, xAnchor, yAnchor, theta);
-                rotate_point(&line->end  , xAnchor, yAnchor, theta);
-            }
-            for (int i = 0; i < state->rectanglesCount; ++i) {
-                for (int j = 0; j < 4; ++j) {
-                    rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
-                }
-            }
-        }
-    }
-#endif
-
-
-    //XXX
-    {
-        Button_State* left  = &input->mouse.buttons[MOUSE_BUTTON_LEFT ];
-        //Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
-
-        if (left->changed && left->endedDown) {
-            // begin line
-            state->testLine->start.x = (f32) (input->mouse.cursor.position.x - state->xOffset);
-            state->testLine->start.y = (f32) (input->mouse.cursor.position.y - state->yOffset);
-            state->testLine->end.x   = (f32) (input->mouse.cursor.position.x - state->xOffset);
-            state->testLine->end.y   = (f32) (input->mouse.cursor.position.y - state->yOffset);
-            state->testLineActive = true;
-            state->rotationActive = false;
-        } else if (left->endedDown) {
-            // continue line
-            if (state->testLineActive) {
-                state->testLine->end.x = (f32) (input->mouse.cursor.position.x - state->xOffset);
-                state->testLine->end.y = (f32) (input->mouse.cursor.position.y - state->yOffset);
-            }
-        } else {
-            // end line
-            state->testLineActive = false;
-        }
-    }
-
-    if (state->testLineActive) {
-
-        f32 x = state->testLine->end.x - state->testLine->start.x;
-        f32 y = state->testLine->end.y - state->testLine->start.y;
-        //y = y * -1; // convert from left-handed to right-handed coordinate system (bitmapBuffer y offset values increase when going down from top)
-        f32 length = sqrtf(powf(x,2) + powf(y,2));
-
-        f32 angle = atan2f(y,x);
-        if (y < 0) angle += 2*PI32;
-
-        local_persist const f32 TEST_LINE_DEAD_ZONE = 50;
-        bool prevRotationActive = state->rotationActive;
-        state->rotationActive = length >= TEST_LINE_DEAD_ZONE;
-        if (!prevRotationActive && state->rotationActive) {
-            //state->testLineAngle = angle;
-            state->testLineInitialAngle = angle;
-        }
-
-        //if (state->rotationActive) {
-        //    f32 theta = angle - state->testLineAngle;
-        //    Platform::DEBUG_display("mouse angle: %.2f, length: %.2f, prev: %.2f, theta: %.2f",
-        //        angle*180/PI32, length, state->testLineAngle*180/PI32, theta*180/PI32);
-        //    if (theta != 0 && state->testLineAngle != angle) {
-        //        f32 xAnchor = state->testLine->start.x; // - state->xOffset;
-        //        f32 yAnchor = state->testLine->start.y; // - state->yOffset;
-        //        for (int i = 0; i < state->linesCount; ++i) {
-        //            Line* line = &state->lines[i];
-        //            rotate_point(&line->start, xAnchor, yAnchor, theta);
-        //            rotate_point(&line->end  , xAnchor, yAnchor, theta);
-        //        }
-        //        for (int i = 0; i < state->rectanglesCount; ++i) {
-        //            for (int j = 0; j < 4; ++j) {
-        //                rotate_point(&state->rectangles[i].points[j], xAnchor, yAnchor, theta);
-        //            }
-        //        }
-        //    }
-        //} else {
-        //    Platform::DEBUG_display("mouse angle: %.2f, length: %.2f",
-        //        angle*180/PI32, length);
-        //}
-
-        state->testLineAngle = angle; // XXX why is this here and also above in the conditional?
-        state->testLine->color = state->rotationActive ? get_color(0, 255, 0) : get_color(255, 0, 0);
-        //Platform::DEBUG_display("mouse angle: %.2f", angle*180/PI32);
-
-    } else {
-        //Platform::DEBUG_display("");
-        state->rotationActive = false;
-    }
-
     //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_test_color_bands(bitmapBuffer);
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
     //draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
-    //f32 theta;
-    ////f32 rotationAngleDelta;
-    //if (state->rotationActive) {
-    //    theta = state->testLineAngle - state->testLineInitialAngle;
-    //    //rotationAngleDelta = theta - state->testLineAnglePrevious;
-    //} else {
-    //    theta = state->previousTheta;
-    //    //rotationAngleDelta = 0;
-    //}
+    Vector2i viewCenter;
+    viewCenter.x = bitmapBuffer->width  / 2;
+    viewCenter.y = bitmapBuffer->height / 2;
 
-    if (state->rotationActive) {
-        // get angle of line
-        // get angle of line from previous update
-        // get the delta between the two
-        // add the delta to the running total rotation angle
-        // pass that total rotation angle into all of the functions to do the rotations
-
-        //f32 delta = current - previous;
-
-        f32 current = state->testLineAngle;
-        f32 previous = state->rotationActivePrevious ? state->testLineAnglePrevious : state->testLineInitialAngle;
-
-        f32 delta = current - previous;
-        if      (delta >  PI32) { delta = PI32*2 - delta; }
-        else if (delta < -PI32) { delta = PI32*2 + delta; }
-
-        state->rotationAngle += delta;
-
-        state->testLineAnglePrevious = current;
-
-    }
-
-    Platform::DEBUG_display("current %.2f, rotate %.2f, active %d",
-        state->testLineAngle*180/PI32,
-        state->rotationAngle*180/PI32,
-        state->rotationActive);
-
-    f32 theta = state->rotationAngle; // XXX
-
-    f32 xRotationOrigin;
-    f32 yRotationOrigin;
-    //if (state->rotationActive) {
-    //    xRotationOrigin = state->testLine->start.x;
-    //    yRotationOrigin = state->testLine->start.y;
-    //} else {
-    //    xRotationOrigin = state->xRotationOriginPrevious;
-    //    yRotationOrigin = state->yRotationOriginPrevious;
-    //}
-    xRotationOrigin = state->testLine->start.x;
-    yRotationOrigin = state->testLine->start.y;
-
-    //state->rotationAngle += rotationAngleDelta;
-    //Platform::DEBUG_display("angle: %.2f", state->rotationAngle*180/PI32);
+    int xRotationOrigin = viewCenter.x - state->xOffset;
+    int yRotationOrigin = viewCenter.y - state->yOffset;
 
     local_persist u32 COLOR_BG = get_color(60, 60, 60);
     fill_color(bitmapBuffer, COLOR_BG);
 
     Crosshair* ch = first_ch;
+    local_persist u32 COLOR_PAN_CH = get_color(200, 150, 30);
     for (u32 i = 0; i < num_ch; ++i) {
-        draw_crosshair(bitmapBuffer, ch->x, ch->y, 20);
+        draw_crosshair(bitmapBuffer, ch->x, ch->y, 20, COLOR_PAN_CH);
         ++ch;
     }
 
+    local_persist u32 COLOR_CH = get_color(255, 255, 255);
+    draw_crosshair(bitmapBuffer, viewCenter.x, viewCenter.y, 100, COLOR_CH);
+
     for (int i = 0; i < state->rectanglesCount; ++i) {
-        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, theta, xRotationOrigin, yRotationOrigin, &state->rectangles[i]);
+        draw_rect(bitmapBuffer, state->xOffset, state->yOffset, state->rotationAngle, xRotationOrigin, yRotationOrigin, &state->rectangles[i]);
     }
 
     for (int i = 0; i < state->linesCount; ++i) {
         Line* line = &state->lines[i];
-        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, theta, xRotationOrigin, yRotationOrigin, line);
-        //draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, line);
+        draw_line(bitmapBuffer, state->xOffset, state->yOffset, state->rotationAngle, xRotationOrigin, yRotationOrigin, line);
+        //draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
         //draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
-    }
-
-    if (state->testLineActive) {
-        // Pass zeroes for rotation angle, otherwise the rotation line will be rotated by itself!
-        draw_line_linear_interpolate(bitmapBuffer, state->xOffset, state->yOffset, 0, 0, 0, state->testLine);
     }
 
 #if ZOOM
@@ -818,15 +665,18 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
-    state->rotationActivePrevious = state->rotationActive;
-    state->previousTheta = theta;
-
-    if (state->rotationActive) {
-        state->xRotationOriginPrevious = xRotationOrigin;
-        state->yRotationOriginPrevious = yRotationOrigin;
-    }
 
 }
 
 } // namespace Render
+
+/* line angle
+void xx() {
+    f32 x = state->testLine->end.x - state->testLine->start.x;
+    f32 y = state->testLine->end.y - state->testLine->start.y;
+    f32 length = sqrtf(powf(x,2) + powf(y,2));
+    f32 angle = atan2f(y,x);
+    if (y < 0) angle += 2*PI32;
+}
+*/
 
