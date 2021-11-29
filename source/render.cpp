@@ -45,6 +45,15 @@ u32 get_color(u8 red, u8 green, u8 blue) {
     return color;
 }
 
+void get_rgb(u8* red, u8* green, u8* blue, u32 color) {
+    u8 r = (color >> RED_BIT_OFFSET  ) & 0xFF;
+    u8 g = (color >> GREEN_BIT_OFFSET) & 0xFF;
+    u8 b = (color >> BLUE_BIT_OFFSET ) & 0xFF;
+    *red = r;
+    *green = g;
+    *blue = b;
+}
+
 namespace Render {
 
 struct Offscreen_Bitmap_Buffer {
@@ -81,6 +90,11 @@ struct Line {
     Vector2 start;
     Vector2 end;
     u32 color;
+};
+
+struct Circle {
+    Vector2 center;
+    f32 radius;
 };
 
 void draw_weird_gradient(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
@@ -134,13 +148,13 @@ void fill_color(Offscreen_Bitmap_Buffer* bitmapBuffer, u32 color) {
     }
 }
 
-void fill_pixel(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, u32 color) {
-    if (xOffset >= 0 && xOffset < bitmapBuffer->width &&
-        yOffset >= 0 && yOffset < bitmapBuffer->height) {
+void fill_pixel(Offscreen_Bitmap_Buffer* bitmapBuffer, int x, int y, u32 color) {
+    if (x >= 0 && x < bitmapBuffer->width &&
+        y >= 0 && y < bitmapBuffer->height) {
         u8* row = (u8*) bitmapBuffer->memory;
-        row += bitmapBuffer->pitch * yOffset;
+        row += bitmapBuffer->pitch * y;
         u32* pixel = (u32*) row;
-        pixel += xOffset;
+        pixel += x;
         *pixel = color;
     }
 }
@@ -264,7 +278,8 @@ struct State {
     int rectanglesCount;
     Line* lines;
     int linesCount;
-
+    Circle* circles;
+    int circlesCount;
 };
 
 struct Memory {
@@ -352,6 +367,7 @@ f64 linear_interpolate(f64 y1, f64 y2, f64 mu) {
 
 void draw_line(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, int xRotationOrigin, int yRotationOrigin, const Line* line) {
 
+    // FIXME it's just a copy...either do all of this per pixel with no copies, or just bulk copy all of the objects to a block that's then morphed, rather than doing it one at a time on the stack several functions down.  Or maybe at least reuse the memory instead of using the stack.
     Line lineR = *line;
     rotate_point(&lineR.start, xRotationOrigin, yRotationOrigin, theta);
     rotate_point(&lineR.end  , xRotationOrigin, yRotationOrigin, theta);
@@ -452,7 +468,43 @@ void draw_crosshair(Offscreen_Bitmap_Buffer* bitmapBuffer, int x, int y, int len
     draw_line(bitmapBuffer, 0, 0, 0, 0, 0, &h);
 }
 
+void draw_circle(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset, f32 theta, int xRotationOrigin, int yRotationOrigin, Circle* circle, u32 color) {
+    
+    // probably want to make this higher resolution
+    // or maybe make it proportional to the radius
+    local_persist const f32 step = 3.6f * PI32/180.0f;
+
+    Vector2 v;
+
+    u8 r, g, b;
+    get_rgb(&r, &g, &b, color); // don't think this is right (brown -> green?), but at least I get the fade
+    for (f32 i = 0.0; i < 2*PI32; i += step) {
+
+        f32 s = sinf(i);
+        f32 c = cosf(i);
+
+        f32 xr = circle->radius * c;
+        f32 yr = circle->radius * s;
+
+        v.x = circle->center.x + xr;
+        v.y = circle->center.y + yr;
+
+        rotate_point(&v, xRotationOrigin, yRotationOrigin, theta);
+
+        int xi = int(v.x) + xOffset;
+        int yi = int(v.y) + yOffset;
+
+        u8 ii = u8(100*(i/(2*PI32)));
+        u32 _color = get_color(r + ii, g + ii, b + ii);
+
+        fill_pixel(bitmapBuffer, xi, yi, _color);
+    }
+
+}
+
 #if ZOOM
+// FIXME Can't zoom on arbitrary point.  It wouldn't make sense after the whole rotation around the testLine debacle.
+// FIXME FIXME morphs the points
 void scale_point(Vector2* p, int xOffset, int yOffset, int xMouse, int yMouse, int scrollFactor) {
     //p->x = p->x - xOffset + scrollFactor;
     //p->y = p->y - yOffset + scrollFactor;
@@ -523,6 +575,17 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             line->end.y = (f32) (rand() % 300 + (bitmapBuffer->height / 2));
             line->color = line_color;
             p += sizeof(Line);
+        }
+
+
+        state->circles = (Circle*) p;
+        state->circlesCount = 10;
+        for (int i = 0; i < state->circlesCount; ++i) {
+            Circle* circle = (Circle*) p;
+            circle->center.x = 400.0f + f32(i*4);
+            circle->center.y = 400.0f + f32(i*3);
+            circle->radius = 50.0f;
+            p += sizeof(Circle);
         }
 
         next_ch = (Crosshair*) p;
@@ -644,6 +707,11 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         draw_line(bitmapBuffer, state->xOffset, state->yOffset, state->rotationAngle, xRotationOrigin, yRotationOrigin, line);
         //draw_line(bitmapBuffer, state->xOffset, state->yOffset, line);
         //draw_line_old(bitmapBuffer, state->xOffset + 50, state->yOffset + 50, line); // + 50 for debugging compared to new draw_line
+    }
+
+    local_persist u32 COLOR_CIRCLE = get_color(255, 180, 100);
+    for (int i = 0; i < state->circlesCount; ++i) {
+        draw_circle(bitmapBuffer, state->xOffset, state->yOffset, state->rotationAngle, xRotationOrigin, yRotationOrigin, &state->circles[i], COLOR_CIRCLE);
     }
 
 #if ZOOM
