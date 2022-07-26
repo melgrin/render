@@ -236,6 +236,13 @@ enum Keyboard_Button_Index {
    KEYBOARD_BUTTON_LEFT,
    KEYBOARD_BUTTON_RIGHT,
 
+   KEYBOARD_BUTTON_1,
+   KEYBOARD_BUTTON_2,
+   KEYBOARD_BUTTON_3,
+   KEYBOARD_BUTTON_4,
+
+   KEYBOARD_BUTTON_G,
+
    KEYBOARD_BUTTON_COUNT
 };
 
@@ -269,6 +276,12 @@ struct Mouse_Input {
     Mouse_Wheel wheel;
 };
 
+enum Background {
+    BACKGROUND_BLANK    = 0,
+    BACKGROUND_GRADIENT = 1,
+    BACKGROUND_BANDS    = 2,
+};
+
 struct State {
     int xOffset;
     int yOffset;
@@ -280,6 +293,10 @@ struct State {
     int linesCount;
     Circle* circles;
     int circlesCount;
+    Background background;
+    int xBackgroundOffset;
+    int yBackgroundOffset;
+    u8 blankBackgroundColorFactor;
 };
 
 struct Memory {
@@ -591,6 +608,8 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
 
+        state->background = BACKGROUND_BLANK;
+
         memory->isInitialized = true;
     }
 
@@ -657,6 +676,9 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
 
         state->xOffset += int(dx); // XXX f32?
         state->yOffset += int(dy); // XXX f32?
+
+        state->xBackgroundOffset += cursor->change.x;
+        state->yBackgroundOffset += cursor->change.y;
     }
 
 #if 0
@@ -673,10 +695,37 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     }
 #endif
 
-    //draw_weird_gradient(bitmapBuffer, state->xOffset, state->yOffset);
-    //draw_test_color_bands(bitmapBuffer);
+    if (input->mouse.wheel.delta != 0) {
+        int factor = (int) state->blankBackgroundColorFactor;
+        factor += 10 * input->mouse.wheel.delta;
+        if (factor < 0) { factor = 0; }
+        else if (factor > 255) { factor = 255; }
+        state->blankBackgroundColorFactor  = (u8) factor;
+    }
+
+    if (input->keyboard.buttons[KEYBOARD_BUTTON_1].endedDown) {
+        state->background = BACKGROUND_BLANK;
+    } else if (input->keyboard.buttons[KEYBOARD_BUTTON_2].endedDown) {
+        state->background = BACKGROUND_GRADIENT;
+    } else if (input->keyboard.buttons[KEYBOARD_BUTTON_3].endedDown) {
+        state->background = BACKGROUND_BANDS;
+    }
+
+    if (state->background == BACKGROUND_BLANK) {
+        u8 bg = state->blankBackgroundColorFactor;
+        u32 color = get_color(bg, bg, bg);
+        fill_color(bitmapBuffer, color);
+    } else if (state->background == BACKGROUND_GRADIENT) {
+        draw_weird_gradient(bitmapBuffer, state->xBackgroundOffset, state->yBackgroundOffset);
+    } else if (state->background == BACKGROUND_BANDS) {
+        draw_test_color_bands(bitmapBuffer);
+    }
+
+    if (input->keyboard.buttons[KEYBOARD_BUTTON_G].endedDown) {
+        draw_grid(bitmapBuffer, state->xBackgroundOffset, state->yBackgroundOffset);
+    }
+
     //draw_crosshair(bitmapBuffer, state->xOffset, state->yOffset);
-    //draw_grid(bitmapBuffer, state->xOffset, state->yOffset);
 
     Vector2i viewCenter;
     viewCenter.x = bitmapBuffer->width  / 2;
@@ -684,9 +733,6 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
 
     int xRotationOrigin = viewCenter.x - state->xOffset;
     int yRotationOrigin = viewCenter.y - state->yOffset;
-
-    local_persist u32 COLOR_BG = get_color(60, 60, 60);
-    fill_color(bitmapBuffer, COLOR_BG);
 
     Crosshair* ch = first_ch;
     local_persist u32 COLOR_PAN_CH = get_color(200, 150, 30);

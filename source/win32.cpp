@@ -169,6 +169,16 @@ bool process_pending_messages(Render::Input* input) {
                         process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_LEFT]);
                     } else if (key == 'D') {
                         process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_RIGHT]);
+                    } else if (key == 'G') {
+                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_G]);
+                    } else if (key == '1') {
+                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_1]);
+                    } else if (key == '2') {
+                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_2]);
+                    } else if (key == '3') {
+                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_3]);
+                    } else if (key == '4') {
+                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_4]);
                     } else if (key == VK_UP) {
                         process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_UP]);
                     } else if (key == VK_DOWN) {
