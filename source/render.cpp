@@ -225,9 +225,11 @@ void draw_grid(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) 
 }
 
 struct Button_State {
-    int halfTransistionCount;
-    bool endedDown;
-    bool changed;
+    //int halfTransistionCount; // the number of ups+downs in a frame
+    bool endedDown; // whether the button was down at the end of the frame
+    bool changed; // whether the button state (up/down) changed from the last frame
+    int downCount; // the number of times the button was pushed down during the frame
+    int upCount; // the number of times the button was released during the frame
 };
 
 enum Keyboard_Button_Index {
@@ -242,6 +244,9 @@ enum Keyboard_Button_Index {
    KEYBOARD_BUTTON_4,
 
    KEYBOARD_BUTTON_G,
+   KEYBOARD_BUTTON_R,
+   KEYBOARD_BUTTON_Q,
+   KEYBOARD_BUTTON_E,
 
    KEYBOARD_BUTTON_COUNT
 };
@@ -551,12 +556,27 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
     local_persist Crosshair* next_ch = 0;
     local_persist Crosshair* first_ch = 0;
     local_persist u32 num_ch = 0;
+    bool generate_shapes = false;
     if (!memory->isInitialized) {
+        generate_shapes = true;
+        srand((int)time(0)); // seed
+        state->background = BACKGROUND_BLANK;
+        memory->isInitialized = true;
+    }
+
+    {
+        const Button_State* refreshButton = &input->keyboard.buttons[KEYBOARD_BUTTON_R];
+        if (refreshButton->downCount > 0) {
+            generate_shapes = true;
+        }
+    }
+
+    if (generate_shapes) {
+
+        assert(memory->isInitialized == true);
 
         u8* p = (u8*) memory->permanentStorage;
         p += sizeof(State);
-
-        srand((int)time(0)); // seed
 
         u32 rect_color = get_color(222, 126, 45);
 
@@ -605,12 +625,9 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
             p += sizeof(Circle);
         }
 
+        // FIXME these will be (kind of) broken if I regen
         next_ch = (Crosshair*) p;
         first_ch = next_ch;
-
-        state->background = BACKGROUND_BLANK;
-
-        memory->isInitialized = true;
     }
 
 #if 0
@@ -649,15 +666,27 @@ void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer)
         Button_State* right = &input->mouse.buttons[MOUSE_BUTTON_RIGHT];
 
         local_persist const f32 STEP = 10.0f * PI32/180.0f;
-        if (left->changed && left->endedDown) {
+        //if (left->changed && left->endedDown) {
+        if (left->endedDown) {
             thetaFromMouseButtons -= STEP;
         }
-        if (right->changed && right->endedDown) { 
+        //if (right->changed && right->endedDown) { 
+        if (right->endedDown) { 
             thetaFromMouseButtons += STEP;
         }
     }
     state->rotationAngle += thetaFromMouseButtons;
-    Platform::DEBUG_display("rotate %.2f", state->rotationAngle*180/PI32);
+    //Platform::DEBUG_display("rotate %.2f", state->rotationAngle*180/PI32);
+
+    f32 thetaFromKeyboardButtons = 0;
+    {
+        Button_State* q = &input->keyboard.buttons[KEYBOARD_BUTTON_Q];
+        Button_State* e = &input->keyboard.buttons[KEYBOARD_BUTTON_E];
+        local_persist const f32 STEP = 10.0f * PI32/180.0f;
+        thetaFromKeyboardButtons -= q->downCount * STEP;
+        thetaFromKeyboardButtons += e->downCount * STEP;
+    }
+    state->rotationAngle += thetaFromKeyboardButtons;
 
 
     if (state->mouseDragging) {

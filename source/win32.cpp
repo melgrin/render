@@ -24,6 +24,8 @@ typedef double f64;
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
 #include <stdio.h>
 
+//static bool g_refresh = false; // XXX
+
 namespace Platform {
 
 #ifdef RENDERDEV_DEBUG
@@ -129,18 +131,27 @@ void display_bitmap(HDC device_context, int window_width, int window_height, Off
         SRCCOPY);
 }
 
-void process_keyboard_message(bool isDown, Render::Button_State* state) {
-    assert(state->endedDown != isDown); // This happens if you press W and up arrow together, but otherwise, one interrupts the other, and then you're just holding one and nothing is happening.  So need better logic here.
-    state->endedDown = isDown;
-    ++state->halfTransistionCount;
+void process_keyboard_message(bool isDown, bool wasDown, Render::Button_State* state) {
+    //assert(state->endedDown != isDown); // This happens if you press W and up arrow together, but otherwise, one interrupts the other, and then you're just holding one and nothing is happening.  So need better logic here.
+    if (isDown != state->endedDown) {
+        state->endedDown = isDown;
+        //++state->halfTransistionCount;
+    }
+    if (isDown) {
+        state->downCount += 1;
+    } else if (wasDown) {
+        state->upCount += 1;
+    }
 }
 
 void process_mouse_button_message(bool isDown, Render::Button_State* state) {
     if (isDown != state->endedDown) {
         state->endedDown = isDown;
-        ++state->halfTransistionCount;
+        //++state->halfTransistionCount;
     }
 }
+
+#define ProcessKBMessage(KEYBOARD_BUTTON_INDEX) process_keyboard_message(isDown, wasDown, &input->keyboard.buttons[KEYBOARD_BUTTON_INDEX])
 
 bool process_pending_messages(Render::Input* input) {
     bool running = true;
@@ -160,40 +171,30 @@ bool process_pending_messages(Render::Input* input) {
                 u32 key = (u32) message.wParam;
                 bool wasDown = (message.lParam & (1 << 30)) != 0;
                 bool isDown = (message.lParam & (1 << 31)) == 0;
-                if (wasDown != isDown) {
-                    if (key == 'W') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_UP]);
-                    } else if (key == 'S') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_DOWN]);
-                    } else if (key == 'A') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_LEFT]);
-                    } else if (key == 'D') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_RIGHT]);
-                    } else if (key == 'G') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_G]);
-                    } else if (key == '1') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_1]);
-                    } else if (key == '2') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_2]);
-                    } else if (key == '3') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_3]);
-                    } else if (key == '4') {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_4]);
-                    } else if (key == VK_UP) {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_UP]);
-                    } else if (key == VK_DOWN) {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_DOWN]);
-                    } else if (key == VK_LEFT) {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_LEFT]);
-                    } else if (key == VK_RIGHT) {
-                        process_keyboard_message(isDown, &input->keyboard.buttons[Render::KEYBOARD_BUTTON_RIGHT]);
-                    } else if (key == VK_ESCAPE) {
+                //if (wasDown != isDown) {
+                    if      (key == 'W') { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
+                    else if (key == 'S') { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
+                    else if (key == 'A') { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
+                    else if (key == 'D') { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
+                    else if (key == 'G') { ProcessKBMessage(Render::KEYBOARD_BUTTON_G); }
+                    else if (key == 'R') { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); }
+                    else if (key == 'Q') { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); }
+                    else if (key == 'E') { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); }
+                    else if (key == '1') { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); }
+                    else if (key == '2') { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); }
+                    else if (key == '3') { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); }
+                    else if (key == '4') { ProcessKBMessage(Render::KEYBOARD_BUTTON_4); }
+                    else if (key == VK_UP) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
+                    else if (key == VK_DOWN) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
+                    else if (key == VK_LEFT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
+                    else if (key == VK_RIGHT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
+                    else if (key == VK_ESCAPE) {
                         running = false;
                     } else if (key == VK_SPACE) {
                         // To hopefully mitigate the delayed printing.
                         OutputDebugStringA("");
                     }
-                }
+                //}
 
                 // Since we're handling SYSKEYUP/SYSKEYDOWN, need to do this to restore ALT+F4 functionality.
                 bool altKeyWasDown = ((message.lParam & (1 << 29)) != 0);
@@ -356,24 +357,24 @@ int CALLBACK WinMain(
     //window_class.hIcon = ;
 
     int monitorRefreshHz = 60; // TODO
-    int gameUpdateHz = monitorRefreshHz / 2;
-    f32 targetSecondsElapsedPerFrame = 1.0f / (f32) gameUpdateHz;
+    int updateHz = monitorRefreshHz / 2;
+    f32 targetSecondsElapsedPerFrame = 1.0f / (f32) updateHz;
 
     if (RegisterClass(&window_class)) {
 
         HWND window = CreateWindowEx(
-            0,
-            window_class.lpszClassName,
-            "RenderTest",
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            0,
-            0,
-            instance,
-            0);
+            0,                                // DWORD      exStyle
+            window_class.lpszClassName,       // LPCSTR     className
+            "RenderTest",                     // LPCSTR     windowName
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE, // DWORD      style
+            CW_USEDEFAULT,                    // int        X
+            CW_USEDEFAULT,                    // int        Y
+            800,//CW_USEDEFAULT,              // int        width
+            800,//CW_USEDEFAULT,              // int        height
+            0,                                // HWND       wndParent
+            0,                                // HMENU      menu
+            instance,                         // HINSTANCE  instance
+            0);                               // LPVOID     param
 
         if (window) {
 
@@ -403,7 +404,7 @@ int CALLBACK WinMain(
                     Win32::g_perfCountFrequency = freq.QuadPart;
                 }
 
-                char windowTitleString[128];
+                //char windowTitleString[128];
 
                 s64 lastCounter = Win32::get_wall_clock();
                 u64 lastCycleCount = __rdtsc();
@@ -428,6 +429,7 @@ int CALLBACK WinMain(
                     }
                     newMouseInput->cursor = oldMouseInput->cursor;
 
+                    //g_refresh = false;
                     if (!Win32::process_pending_messages(newInput)) {
                         Win32::g_running = false;
                     }
@@ -436,6 +438,10 @@ int CALLBACK WinMain(
                         newKeyboardInput->buttons[i].changed = 
                             newKeyboardInput->buttons[i].endedDown != 
                             oldKeyboardInput->buttons[i].endedDown;
+
+                        //assert(newKeyboardInput->buttons[i].halfTransistionCount == 
+                        //    (newKeyboardInput->buttons[i].downCount + 
+                        //     newKeyboardInput->buttons[i].upCount));
                     }
 
                     for (int i = 0; i < arrayCount(newMouseInput->buttons); ++i) {
@@ -459,7 +465,11 @@ int CALLBACK WinMain(
                     bitmapBuffer.height = Win32::g_bitmap.height;
                     bitmapBuffer.pitch  = Win32::g_bitmap.pitch;
 
+                    //if (g_refresh) {
+                    //    OutputDebugStringA("refresh");
+                    //}
                     Render::update(&memory, newInput, &bitmapBuffer);
+                    //OutputDebugStringA("\n");
 
                     // enforce frame rate
                     {
@@ -485,6 +495,7 @@ int CALLBACK WinMain(
                     dimension = Win32::get_window_dimension(window);
                     Win32::display_bitmap(device_context, dimension.width, dimension.height, &Win32::g_bitmap);
 
+                    /*
                     if (-1 != snprintf(
                             windowTitleString,
                             sizeof(windowTitleString),
@@ -496,16 +507,7 @@ int CALLBACK WinMain(
                             Platform::DEBUG_window_text)) {
                         SetWindowTextA(window, windowTitleString);
                     }
-
-                    //XXX tmp debug
-                    //for (int i = 0; i < Render::MOUSE_BUTTON_COUNT; ++i) {
-                    //    Render::Button_State* old = &oldMouseInput->buttons[i];
-                    //    Render::Button_State* New = &newMouseInput->buttons[i];
-                    //    if (old->endedDown != New->endedDown) {
-                    //        Platform::DEBUG_printf("%d button: %d -> %d, changed %d\n",
-                    //            i, old->endedDown, New->endedDown, New->changed);
-                    //    }
-                    //}
+                    */
 
                     swap(newInput, oldInput);
 
