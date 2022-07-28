@@ -31,13 +31,13 @@ Each frame, `Render` checks user input to see if the image should be modified.  
 
 ### Examples
 
-![panning](assets/pan.webm)
+[panning](https://user-images.githubusercontent.com/74131405/181424883-54e86065-2d5a-4d28-9d0c-32133fd65443.webm)
 
-![rotating](assets/rotate.webm)
+[rotating](https://user-images.githubusercontent.com/74131405/181425109-8302066f-f920-4fb8-8c05-2db17c44e52d.webm)
 
-![generating random shapes](assets/random.webm)
+[generating new shapes](https://user-images.githubusercontent.com/74131405/181425135-179915df-c27b-479b-a6ff-a3bf83a879a2.webm)
 
-![various backgrounds](assets/backgrounds.webm)
+[various backgrounds](https://user-images.githubusercontent.com/74131405/181425145-fd58f87e-ed13-427b-a702-9b40ce49266e.webm)
 
 ### Notes
 
