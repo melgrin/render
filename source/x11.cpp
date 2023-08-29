@@ -39,7 +39,7 @@ int main() {
         0,                           // border
         0);                          // background
 
-    XWindowAttributes wa = {0};
+    XWindowAttributes wa = {};
     XGetWindowAttributes(display, window, &wa);
 
     GC gc = XCreateGC(display, window, 0, NULL);
