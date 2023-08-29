@@ -3,31 +3,7 @@
 // - circle/oval
 // - ??
 
-#ifdef RENDERDEV_ASSERT
-#define assert(X) if (!(X)) { *(int*)0 = 0; }
-#else
-#define assert(X)
-#endif
-
-#ifdef RENDERDEV_DEBUG
-namespace Platform {
-    void DEBUG_printf(const char* format, ...);
-    void DEBUG_display(const char* format, ...);
-}
-#endif
-
-#define arrayCount(X) (sizeof(X)/sizeof((X)[0]))
-
-#define swap(A, B) do { \
-    decltype(A) temp = A; \
-    A = B; \
-    B = temp; \
-} while (0)
-
-#define kilobytes(X) ((X)*1024)
-#define megabytes(X) (kilobytes(X)*1024)
-#define gigabytes(X) (megabytes(X)*1024)
-#define terabytes(X) (gigabytes(X)*1024)
+#include "common.h"
 
 #define PI32 3.14159265f
 
