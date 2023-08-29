@@ -373,9 +373,9 @@ int CALLBACK WinMain(
             memory.transientStorageSize = megabytes(128);
             u64 totalSize = memory.permanentStorageSize + memory.transientStorageSize;
             memory.permanentStorage = VirtualAlloc(baseAddress, (size_t) totalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            memory.transientStorage = (u8*) memory.permanentStorage + memory.permanentStorageSize;
 
-            if (memory.permanentStorage && memory.transientStorage) {
+            if (memory.permanentStorage) {
+                memory.transientStorage = (u8*) memory.permanentStorage + memory.permanentStorageSize;
 
                 Render::Input input[2] = {};
                 Render::Input* newInput = &input[0];
