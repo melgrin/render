@@ -15,20 +15,11 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h> // see X11/keysymdef.h line ~600
 
-#define GRID_WIDTH_PX 400
-#define GRID_HEIGHT_PX 400
-
-typedef uint32_t RGBA32;
-#define BYTES_PER_PIXEL sizeof(RGBA32)
+// RGBA
+#define BYTES_PER_PIXEL sizeof(uint32_t)
 
 // 60 fps, microseconds
 #define TARGET_ELAPSED_TIME 16667
-
-//static void fill_rgba32(RGBA32 grid[GRID_WIDTH_PX * GRID_HEIGHT_PX], RGBA32 value) {
-//    for (size_t i = 0; i < GRID_WIDTH_PX * GRID_HEIGHT_PX; ++i) {
-//        grid[i] = value;
-//    }
-//}
 
 namespace X11 {
 
@@ -70,7 +61,7 @@ void resize_DIB_section(Display* display, Window window, Offscreen_Bitmap_Buffer
             XFree(bitmap->info);
         }
 
-        XImage* image = XCreateImage( // TODO resize upon window resize (not sure if I can just XPutImage with a new size. probably not.)
+        XImage* image = XCreateImage(
             display,
             wa.visual,
             wa.depth,
@@ -119,8 +110,6 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
     XEvent event = {};
 
     while (XPending(display)) {
-
-        //printf("Message for you sir!\n");
 
         XNextEvent(display, &event);
         switch (event.type) {
@@ -225,24 +214,18 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
             }
             break;
 
-            // This is the request going to the window manager, outside of Xlib.
-            // I think requests happen before the action actually occurs, so it's not useful from a reactionary point of view.
-            //case ResizeRequest: {
-            //break;
-
-            case MapNotify: { // StructureNotifyMask
-            }
-            break;
-
             case ConfigureNotify: { // StructureNotifyMask
                 //XConfigureEvent* configure_event = (XConfigureEvent*) &event;
                 //printf("w %4d   h %4d   x %4d   y %4d\n",
                 //    configure_event->width, configure_event->height,
                 //    configure_event->x, configure_event->y);
-                //XWindowAttributes wa = {};
-                //XGetWindowAttributes(display, window, &wa);
-                //printf("wa [w %d, h %d]\n", wa.width, wa.height);
                 resize_DIB_section(display, window, &X11::g_bitmap);
+            }
+            break;
+
+            case MapNotify: // StructureNotifyMask
+            case ReparentNotify: { // StructureNotifyMask
+                // no-op
             }
             break;
 
@@ -283,17 +266,13 @@ int main() {
         XDefaultRootWindow(display), // parent
         0,                           // x
         0,                           // y
-        GRID_WIDTH_PX,               // width
-        GRID_HEIGHT_PX,              // height
+        400,                         // width
+        400,                         // height
         0,                           // border_width
         0,                           // border
         0);                          // background
 
-    {
-        //XWindowAttributes wa = {};
-        //XGetWindowAttributes(display, window, &wa);
-        resize_DIB_section(display, window, &X11::g_bitmap); //, wa.width, wa.height);
-    }
+    resize_DIB_section(display, window, &X11::g_bitmap);
 
     GC gc = XCreateGC(display, window, 0, NULL);
 
@@ -389,28 +368,22 @@ int main() {
 
             Render::update(&memory, newInput, &bitmapBuffer);
 
-            u64 work_end_time = get_time_usec();
-            u64 work_elapsed_time = work_end_time - last_frame_end_time;
-            if (work_elapsed_time > TARGET_ELAPSED_TIME) {
-                printf("overframed: %lu\n", work_elapsed_time); // this happens quite a bit when fullscreen on 1920x1080
-            } else {
-                u64 remaining = TARGET_ELAPSED_TIME - work_elapsed_time;
-                usleep(remaining);
+            {
+                u64 work_end_time = get_time_usec();
+                u64 work_elapsed_time = work_end_time - last_frame_end_time;
+                if (work_elapsed_time > TARGET_ELAPSED_TIME) {
+                    printf("overframed: %lu\n", work_elapsed_time); // this happens quite a bit when fullscreen on 1920x1080
+                } else {
+                    u64 remaining = TARGET_ELAPSED_TIME - work_elapsed_time;
+                    usleep(remaining);
+                }
             }
-
 
             X11::display_bitmap(display, window, gc, &X11::g_bitmap);
 
             swap(newInput, oldInput);
 
-            //u64 frame_end_time = 
-            //u64 frame_elapsed_time = frame_end_time - frame_start_time;
-            //if (frame_elapsed_time > 16667) {
-            //    printf("overframed: %lu\n", frame_elapsed_time);
-            //}
-
             last_frame_end_time = get_time_usec();
-
         }
 
     } else {
