@@ -21,6 +21,9 @@
 typedef uint32_t RGBA32;
 #define BYTES_PER_PIXEL sizeof(RGBA32)
 
+// 60 fps, microseconds
+#define TARGET_ELAPSED_TIME 16667
+
 //static void fill_rgba32(RGBA32 grid[GRID_WIDTH_PX * GRID_HEIGHT_PX], RGBA32 value) {
 //    for (size_t i = 0; i < GRID_WIDTH_PX * GRID_HEIGHT_PX; ++i) {
 //        grid[i] = value;
@@ -89,25 +92,49 @@ void display_bitmap(Display* display, Window window, GC gc, Offscreen_Bitmap_Buf
     XPutImage(display, window, gc, bitmap->info, 0, 0, 0, 0, bitmap->width, bitmap->height);
 }
 
-bool process_pending_messages(Display* display, Render::Input* /*TODO input*/, int keysyms_per_keycode) {
+void process_keyboard_message(bool isDown, bool /*wasDown*/, Render::Button_State* state) {
+    if (isDown != state->endedDown) {
+        state->endedDown = isDown;
+    }
+    //TODO no equivalent of wasDown in X11 within the message itself, so will need to store it during the frame.  But also, downCount and upCount aren't used by Render right now, so maybe I should just get rid of them.
+    //if (isDown) {
+    //    state->downCount += 1;
+    //} else if (wasDown) {
+    //    state->upCount += 1;
+    //}
+}
+
+void process_mouse_button_message(bool isDown, Render::Button_State* state) {
+    if (isDown != state->endedDown) {
+        state->endedDown = isDown;
+        //++state->halfTransistionCount;
+    }
+}
+
+#define ProcessKBMessage(KEYBOARD_BUTTON_INDEX) process_keyboard_message(isDown, wasDown, &input->keyboard.buttons[KEYBOARD_BUTTON_INDEX])
+
+bool process_pending_messages(Display* display, Window window, Render::Input* input, int keysyms_per_keycode) {
     bool running = true;
 
     XEvent event = {};
 
     while (XPending(display)) {
 
-        printf("Message for you sir!\n");
+        //printf("Message for you sir!\n");
 
         XNextEvent(display, &event);
         switch (event.type) {
 
-            case KeyPress: {
+            case KeyPress: // fallthrough
+            case KeyRelease: {
                 XKeyEvent* key_event = (XKeyEvent*) &event;
                 //assert(key_event->display == display);
                 //assert(key_event->window == window);
                 //printf("key press: state = %u, detail = %u\n", key_event->state, key_event->keycode);
+                bool isDown = (event.type == KeyPress);
+                bool wasDown = false; // TODO, unused
                 for (int i = 0; i < keysyms_per_keycode; ++i) {
-                    KeySym ks = XLookupKeysym(key_event, i);
+                    KeySym key = XLookupKeysym(key_event, i);
 
                     //char c = '?';
                     //if (isprint(ks)) {
@@ -120,27 +147,70 @@ bool process_pending_messages(Display* display, Render::Input* /*TODO input*/, i
                     //}
                     //printf("%d: kc %u -> ks %lu (%c)\n", i, key_event->keycode, ks, c);
 
-                    switch (ks) {
-                        //case XK_q:
-                        case XK_Escape:
-                            running = false;
-                            break;
-                        case XK_r:
-                            //fill_rgba32(grid_px, 0xff0000);
-                            //XPutImage(display, window, gc, image, 0, 0, 0, 0, GRID_WIDTH_PX, GRID_HEIGHT_PX);
-                            break;
-                        case XK_g:
-                            //fill_rgba32(grid_px, 0x00ff00);
-                            //XPutImage(display, window, gc, image, 0, 0, 0, 0, GRID_WIDTH_PX, GRID_HEIGHT_PX);
-                            break;
-                        case XK_b:
-                            //fill_rgba32(grid_px, 0x0000ff);
-                            //XPutImage(display, window, gc, image, 0, 0, 0, 0, GRID_WIDTH_PX, GRID_HEIGHT_PX);
-                            break;
-                        default:
-                            break;
+                    if      (key == XK_w) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
+                    else if (key == XK_s) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
+                    else if (key == XK_a) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
+                    else if (key == XK_d) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
+                    else if (key == XK_g) { ProcessKBMessage(Render::KEYBOARD_BUTTON_G); }
+                    else if (key == XK_r) { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); }
+                    else if (key == XK_q) { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); }
+                    else if (key == XK_e) { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); }
+                    else if (key == XK_1) { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); }
+                    else if (key == XK_2) { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); }
+                    else if (key == XK_3) { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); }
+                    else if (key == XK_4) { ProcessKBMessage(Render::KEYBOARD_BUTTON_4); }
+                    //else if (key == VK_UP) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
+                    //else if (key == VK_DOWN) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
+                    //else if (key == VK_LEFT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
+                    //else if (key == VK_RIGHT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
+                    else if (key == XK_Escape) {
+                        running = false;
                     }
                 }
+            }
+            break;
+
+            // mouse button
+            case ButtonPress: // fallthrough
+            case ButtonRelease: {
+                XButtonEvent* button_event = (XButtonEvent*) &event;
+                //printf("mouse pressed:  x %4d   y %4d   state %2d   button %2d\n",
+                //    button_event->x,
+                //    button_event->y,
+                //    button_event->state,
+                //    button_event->button);
+
+                //button_event->state is for things like shift and control
+
+                input->mouse.cursor.position.x = button_event->x;
+                input->mouse.cursor.position.y = button_event->y;
+
+                bool isDown = event.type == ButtonPress;
+                switch (button_event->button) {
+                    case Button1:
+                        process_mouse_button_message(isDown, &input->mouse.buttons[Render::MOUSE_BUTTON_LEFT]);
+                        break;
+                    case Button2:
+                        process_mouse_button_message(isDown, &input->mouse.buttons[Render::MOUSE_BUTTON_MIDDLE]);
+                        break;
+                    case Button3:
+                        process_mouse_button_message(isDown, &input->mouse.buttons[Render::MOUSE_BUTTON_RIGHT]);
+                        break;
+                }
+            }
+            break;
+
+            // mouse pointer
+            case MotionNotify: {
+                XMotionEvent* motion_event = (XMotionEvent*) &event;
+                //printf("x %3d  y %3d  state %#x\n", 
+                //    motion_event->x,
+                //    motion_event->y,
+                //    motion_event->state);
+                // state is which mouse button is down during the motion.  I'm just going to rely on ButtonPress instead for now.
+                input->mouse.cursor.position.x = motion_event->x;
+                input->mouse.cursor.position.y = motion_event->y;
+
             }
             break;
 
@@ -155,7 +225,29 @@ bool process_pending_messages(Display* display, Render::Input* /*TODO input*/, i
             }
             break;
 
+            // This is the request going to the window manager, outside of Xlib.
+            // I think requests happen before the action actually occurs, so it's not useful from a reactionary point of view.
+            //case ResizeRequest: {
+            //break;
+
+            case MapNotify: { // StructureNotifyMask
+            }
+            break;
+
+            case ConfigureNotify: { // StructureNotifyMask
+                //XConfigureEvent* configure_event = (XConfigureEvent*) &event;
+                //printf("w %4d   h %4d   x %4d   y %4d\n",
+                //    configure_event->width, configure_event->height,
+                //    configure_event->x, configure_event->y);
+                //XWindowAttributes wa = {};
+                //XGetWindowAttributes(display, window, &wa);
+                //printf("wa [w %d, h %d]\n", wa.width, wa.height);
+                resize_DIB_section(display, window, &X11::g_bitmap);
+            }
+            break;
+
             default: {
+                // See X.h line ~181. Not sure if there's a to_string.
                 fprintf(stderr, "Unhandled event %d\n", event.type);
             }
             break;
@@ -166,6 +258,17 @@ bool process_pending_messages(Display* display, Render::Input* /*TODO input*/, i
 }
 
 } // namespace X11
+
+static u64 get_time_usec() {
+    static struct timespec ts;
+    if (0 == clock_gettime(CLOCK_MONOTONIC, &ts)) {
+        u64 t = ts.tv_sec * 1000000;
+        t += (ts.tv_nsec / 1000);
+        return t;
+    } else {
+        return 0;
+    }
+}
 
 int main() {
 
@@ -186,19 +289,33 @@ int main() {
         0,                           // border
         0);                          // background
 
-    resize_DIB_section(display, window, &X11::g_bitmap);
+    {
+        //XWindowAttributes wa = {};
+        //XGetWindowAttributes(display, window, &wa);
+        resize_DIB_section(display, window, &X11::g_bitmap); //, wa.width, wa.height);
+    }
 
     GC gc = XCreateGC(display, window, 0, NULL);
 
-    int min_keycode, max_keycode;
-    XDisplayKeycodes(display, &min_keycode, &max_keycode);
     int keysyms_per_keycode;
-    XFree(XGetKeyboardMapping(display, min_keycode, max_keycode + 1 - min_keycode, &keysyms_per_keycode));
+    {
+        int min_keycode, max_keycode;
+        XDisplayKeycodes(display, &min_keycode, &max_keycode);
+        XFree(XGetKeyboardMapping(display, min_keycode, max_keycode + 1 - min_keycode, &keysyms_per_keycode));
+    }
 
     X11::g_wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(display, window, &X11::g_wm_delete_window, 1);
 
-    XSelectInput(display, window, KeyPressMask); // TODO mouse
+    // TODO mouse
+    XSelectInput(display, window,
+        KeyPressMask |
+        KeyReleaseMask |
+        ButtonPressMask | 
+        ButtonReleaseMask |
+        StructureNotifyMask |
+        PointerMotionMask |
+        ButtonMotionMask);
 
     XMapWindow(display, window);
 
@@ -218,6 +335,7 @@ int main() {
         Render::Input* oldInput = &input[1];
 
         X11::g_running = true;
+        u64 last_frame_end_time = get_time_usec();
 
         while (X11::g_running) {
 
@@ -239,7 +357,7 @@ int main() {
             newMouseInput->cursor = oldMouseInput->cursor;
 
 
-            if (!X11::process_pending_messages(display, newInput, keysyms_per_keycode)) {
+            if (!X11::process_pending_messages(display, window, newInput, keysyms_per_keycode)) {
                 X11::g_running = false;
             }
 
@@ -271,16 +389,32 @@ int main() {
 
             Render::update(&memory, newInput, &bitmapBuffer);
 
-            //TODO enforce framerate (aka sleep for remainder of remaining frame time)
+            u64 work_end_time = get_time_usec();
+            u64 work_elapsed_time = work_end_time - last_frame_end_time;
+            if (work_elapsed_time > TARGET_ELAPSED_TIME) {
+                printf("overframed: %lu\n", work_elapsed_time); // this happens quite a bit when fullscreen on 1920x1080
+            } else {
+                u64 remaining = TARGET_ELAPSED_TIME - work_elapsed_time;
+                usleep(remaining);
+            }
+
 
             X11::display_bitmap(display, window, gc, &X11::g_bitmap);
 
             swap(newInput, oldInput);
 
+            //u64 frame_end_time = 
+            //u64 frame_elapsed_time = frame_end_time - frame_start_time;
+            //if (frame_elapsed_time > 16667) {
+            //    printf("overframed: %lu\n", frame_elapsed_time);
+            //}
+
+            last_frame_end_time = get_time_usec();
+
         }
 
     } else {
-        // TODO error malloc failed
+        fprintf(stderr, "malloc failed: error %d: %s\n", errno, strerror(errno));
     }
 
     XCloseDisplay(display);
