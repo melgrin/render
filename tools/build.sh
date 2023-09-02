@@ -1,4 +1,6 @@
 #!/bin/sh
+here=$(dirname $0)
+cd $here
 set -e
 mkdir -p ../build
 set -xe

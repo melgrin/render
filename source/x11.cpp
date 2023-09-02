@@ -116,14 +116,13 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
 
             case KeyPress: // fallthrough
             case KeyRelease: {
-                XKeyEvent* key_event = (XKeyEvent*) &event;
                 //assert(key_event->display == display);
                 //assert(key_event->window == window);
                 //printf("key press: state = %u, detail = %u\n", key_event->state, key_event->keycode);
                 bool isDown = (event.type == KeyPress);
                 bool wasDown = false; // TODO, unused
                 for (int i = 0; i < keysyms_per_keycode; ++i) {
-                    KeySym key = XLookupKeysym(key_event, i);
+                    KeySym key = XLookupKeysym(&event.xkey, i);
 
                     //char c = '?';
                     //if (isprint(ks)) {
@@ -163,16 +162,18 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
             case ButtonPress: // fallthrough
             case ButtonRelease: {
                 XButtonEvent* button_event = (XButtonEvent*) &event;
-                //printf("mouse pressed:  x %4d   y %4d   state %2d   button %2d\n",
-                //    button_event->x,
-                //    button_event->y,
-                //    button_event->state,
-                //    button_event->button);
+#if RENDERDEV_DEBUG
+                printf("mouse pressed:  x %4d   y %4d   state %2d   button %2d\n",
+                    event.xbutton.x,
+                    event.xbutton.y,
+                    event.xbutton.state,
+                    event.xbutton.button);
+#endif
 
                 //button_event->state is for things like shift and control
 
-                input->mouse.cursor.position.x = button_event->x;
-                input->mouse.cursor.position.y = button_event->y;
+                input->mouse.cursor.position.x = event.xbutton.x;
+                input->mouse.cursor.position.y = event.xbutton.y;
 
                 bool isDown = event.type == ButtonPress;
                 switch (button_event->button) {
@@ -191,15 +192,15 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
 
             // mouse pointer
             case MotionNotify: {
-                XMotionEvent* motion_event = (XMotionEvent*) &event;
-                //printf("x %3d  y %3d  state %#x\n", 
-                //    motion_event->x,
-                //    motion_event->y,
-                //    motion_event->state);
+#if RENDERDEV_DEBUG
+                printf("x %3d  y %3d  state %#x\n",
+                    event.xmotion.x,
+                    event.xmotion.y,
+                    event.xmotion.state);
+#endif
                 // state is which mouse button is down during the motion.  I'm just going to rely on ButtonPress instead for now.
-                input->mouse.cursor.position.x = motion_event->x;
-                input->mouse.cursor.position.y = motion_event->y;
-
+                input->mouse.cursor.position.x = event.xmotion.x;
+                input->mouse.cursor.position.y = event.xmotion.y;
             }
             break;
 
@@ -215,10 +216,11 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
             break;
 
             case ConfigureNotify: { // StructureNotifyMask
-                //XConfigureEvent* configure_event = (XConfigureEvent*) &event;
-                //printf("w %4d   h %4d   x %4d   y %4d\n",
-                //    configure_event->width, configure_event->height,
-                //    configure_event->x, configure_event->y);
+#if RENDERDEV_DEBUG
+                printf("w %4d   h %4d   x %4d   y %4d\n",
+                    event.xconfigure.width, event.xconfigure.height,
+                    event.xconfigure.x, event.xconfigure.y);
+#endif
                 resize_DIB_section(display, window, &X11::g_bitmap);
             }
             break;
@@ -266,8 +268,8 @@ int main() {
         XDefaultRootWindow(display), // parent
         0,                           // x
         0,                           // y
-        400,                         // width
-        400,                         // height
+        800,                         // width
+        600,                         // height
         0,                           // border_width
         0,                           // border
         0);                          // background
@@ -286,7 +288,6 @@ int main() {
     X11::g_wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(display, window, &X11::g_wm_delete_window, 1);
 
-    // TODO mouse
     XSelectInput(display, window,
         KeyPressMask |
         KeyReleaseMask |
