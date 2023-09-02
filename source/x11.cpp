@@ -116,43 +116,68 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
 
             case KeyPress: // fallthrough
             case KeyRelease: {
-                //assert(key_event->display == display);
-                //assert(key_event->window == window);
-                //printf("key press: state = %u, detail = %u\n", key_event->state, key_event->keycode);
+
+                // X injects artificial KeyPress+KeyRelease pairs when you hold down a key.  The only way to disable it is to use XAutoRepeatOff, but that disables it for the whole X server (aka every window you have open (terminals, editors, etc)).  So instead, find the artificial pair and toss the KeyRelease.
+                if (event.type == KeyRelease) {
+                    if (XPending(display)) {
+                        XEvent next = {};
+                        XPeekEvent(display, &next);
+                        if (next.type == KeyPress &&
+                            next.xkey.time == event.xkey.time &&
+                            next.xkey.state == event.xkey.state &&
+                            next.xkey.keycode == event.xkey.keycode) {
+                            continue;
+                        }
+                    }
+                }
+
+#if RENDERDEV_DEBUG
+                printf("key %8s: state = %u, detail = %u, time = %lu ms\n",
+                    event.type == KeyPress ? "pressed" : "released",
+                    event.xkey.state,
+                    event.xkey.keycode,
+                    event.xkey.time);
+#endif
+
                 bool isDown = (event.type == KeyPress);
-                bool wasDown = false; // TODO, unused
+                bool wasDown = false; // TODO
                 for (int i = 0; i < keysyms_per_keycode; ++i) {
                     KeySym key = XLookupKeysym(&event.xkey, i);
 
-                    //char c = '?';
-                    //if (isprint(ks)) {
-                    //    c = (char) ks;
-                    //} else {
-                    //    int ksb = 0xff & ks;
-                    //    if (isprint(ksb)) {
-                    //        c = (char) ksb;
-                    //    }
-                    //}
-                    //printf("%d: kc %u -> ks %lu (%c)\n", i, key_event->keycode, ks, c);
+#if RENDERDEV_DEBUG > 1
+                    char c = '?';
+                    if (isprint(key)) {
+                        c = (char) key;
+                    } else {
+                        int ksb = 0xff & key;
+                        if (isprint(ksb)) {
+                            c = (char) ksb;
+                        }
+                    }
+                    printf("%d: kc %u -> ks %lu (%c)\n", i, event.xkey.keycode, key, c);
+#endif
 
-                    if      (key == XK_w) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
-                    else if (key == XK_s) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
-                    else if (key == XK_a) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
-                    else if (key == XK_d) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
-                    else if (key == XK_g) { ProcessKBMessage(Render::KEYBOARD_BUTTON_G); }
-                    else if (key == XK_r) { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); }
-                    else if (key == XK_q) { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); }
-                    else if (key == XK_e) { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); }
-                    else if (key == XK_1) { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); }
-                    else if (key == XK_2) { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); }
-                    else if (key == XK_3) { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); }
-                    else if (key == XK_4) { ProcessKBMessage(Render::KEYBOARD_BUTTON_4); }
-                    //else if (key == VK_UP) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); }
-                    //else if (key == VK_DOWN) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); }
-                    //else if (key == VK_LEFT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); }
-                    //else if (key == VK_RIGHT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); }
+                    // example:  press 'r', keysym lookup looks like {'r','R','?','?','?',...}
+                    // break as soon as one match is encountered
+                    if      (key == XK_w || key == XK_W) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); break; }
+                    else if (key == XK_s || key == XK_S) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); break; }
+                    else if (key == XK_a || key == XK_A) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); break; }
+                    else if (key == XK_d || key == XK_D) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); break; }
+                    else if (key == XK_g || key == XK_G) { ProcessKBMessage(Render::KEYBOARD_BUTTON_G); break; }
+                    else if (key == XK_r || key == XK_R) { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); break; }
+                    else if (key == XK_q || key == XK_Q) { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); break; }
+                    else if (key == XK_e || key == XK_E) { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); break; }
+                    else if (key == XK_1) { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); break; }
+                    else if (key == XK_2) { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); break; }
+                    else if (key == XK_3) { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); break; }
+                    else if (key == XK_4) { ProcessKBMessage(Render::KEYBOARD_BUTTON_4); break; }
+                    //else if (key == VK_UP) { ProcessKBMessage(Render::KEYBOARD_BUTTON_UP); break; }
+                    //else if (key == VK_DOWN) { ProcessKBMessage(Render::KEYBOARD_BUTTON_DOWN); break; }
+                    //else if (key == VK_LEFT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_LEFT); break; }
+                    //else if (key == VK_RIGHT) { ProcessKBMessage(Render::KEYBOARD_BUTTON_RIGHT); break; }
                     else if (key == XK_Escape) {
                         running = false;
+                        break;
                     }
                 }
             }
