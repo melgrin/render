@@ -83,16 +83,15 @@ void display_bitmap(Display* display, Window window, GC gc, Offscreen_Bitmap_Buf
     XPutImage(display, window, gc, bitmap->info, 0, 0, 0, 0, bitmap->width, bitmap->height);
 }
 
-void process_keyboard_message(bool isDown, bool /*wasDown*/, Render::Button_State* state) {
+void process_keyboard_message(bool isDown, bool wasDown, Render::Button_State* state) {
     if (isDown != state->endedDown) {
         state->endedDown = isDown;
     }
-    //TODO no equivalent of wasDown in X11 within the message itself, so will need to store it during the frame.  But also, downCount and upCount aren't used by Render right now, so maybe I should just get rid of them.
-    //if (isDown) {
-    //    state->downCount += 1;
-    //} else if (wasDown) {
-    //    state->upCount += 1;
-    //}
+    if (isDown) {
+        state->downCount += 1;
+    } else if (wasDown) {
+        state->upCount += 1;
+    }
 }
 
 void process_mouse_button_message(bool isDown, Render::Button_State* state) {
@@ -102,7 +101,10 @@ void process_mouse_button_message(bool isDown, Render::Button_State* state) {
     }
 }
 
-#define ProcessKBMessage(KEYBOARD_BUTTON_INDEX) process_keyboard_message(isDown, wasDown, &input->keyboard.buttons[KEYBOARD_BUTTON_INDEX])
+#define ProcessKBMessage(KEYBOARD_BUTTON_INDEX) do {\
+    process_keyboard_message(isDown, wasDown[KEYBOARD_BUTTON_INDEX], &input->keyboard.buttons[KEYBOARD_BUTTON_INDEX]); \
+    wasDown[KEYBOARD_BUTTON_INDEX] = isDown; \
+} while (0);
 
 bool process_pending_messages(Display* display, Window window, Render::Input* input, int keysyms_per_keycode) {
     bool running = true;
@@ -140,7 +142,7 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
 #endif
 
                 bool isDown = (event.type == KeyPress);
-                bool wasDown = false; // TODO
+                static bool wasDown[Render::KEYBOARD_BUTTON_COUNT] = {};
                 for (int i = 0; i < keysyms_per_keycode; ++i) {
                     KeySym key = XLookupKeysym(&event.xkey, i);
 
