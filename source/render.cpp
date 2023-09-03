@@ -11,7 +11,6 @@
 #include <time.h> // time for srand
 #include <math.h> // sin, cos
 
-// I think this might only be for Win32, in which case it should go in win32.cpp, which should provide a platform color value creation function.
 global const int BLUE_BIT_OFFSET = 0;
 global const int GREEN_BIT_OFFSET = 8;
 global const int RED_BIT_OFFSET = 16;
