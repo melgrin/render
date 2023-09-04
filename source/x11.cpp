@@ -169,6 +169,7 @@ bool process_pending_messages(Display* display, Window window, Render::Input* in
                     else if (key == XK_r || key == XK_R) { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); break; }
                     else if (key == XK_q || key == XK_Q) { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); break; }
                     else if (key == XK_e || key == XK_E) { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); break; }
+                    else if (key == XK_t || key == XK_T) { ProcessKBMessage(Render::KEYBOARD_BUTTON_T); break; }
                     else if (key == XK_1) { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); break; }
                     else if (key == XK_2) { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); break; }
                     else if (key == XK_3) { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); break; }
@@ -421,3 +422,36 @@ int main() {
     XCloseDisplay(display);
     return 0;
 }
+
+#include <stdarg.h>
+#include <stdio.h>
+
+namespace Platform {
+
+void report_error(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+#ifdef RENDERDEV_DEBUG
+void DEBUG_printf(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
+//global char DEBUG_window_text[256];
+//void DEBUG_display(const char* format, ...) {
+//    va_list args;
+//    va_start(args, format);
+//    vsnprintf(DEBUG_window_text, sizeof(DEBUG_window_text), format, args);
+//    va_end(args);
+//}
+#else
+void DEBUG_printf(const char* /*format*/, ...) {}
+#endif
+}
+
+
