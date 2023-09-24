@@ -1,6 +1,6 @@
 @echo off
 if not "%VSCMD_ARG_TGT_ARCH%" == "%RENDERDEV_WIN32_ARCH_TARGET%" (
-    call vcvars %RENDERDEV_WIN32_ARCH_TARGET%
+    call vcvarsall %RENDERDEV_WIN32_ARCH_TARGET%
 )
 
 if not exist ..\build mkdir ..\build
