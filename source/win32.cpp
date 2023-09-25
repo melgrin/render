@@ -163,6 +163,7 @@ bool process_pending_messages(Render::Input* input) {
                     else if (key == 'R') { ProcessKBMessage(Render::KEYBOARD_BUTTON_R); }
                     else if (key == 'Q') { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); }
                     else if (key == 'E') { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); }
+                    else if (key == 'T') { ProcessKBMessage(Render::KEYBOARD_BUTTON_T); }
                     else if (key == '1') { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); }
                     else if (key == '2') { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); }
                     else if (key == '3') { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); }
