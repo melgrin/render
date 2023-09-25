@@ -33,6 +33,34 @@ static void get_rgb(u8* red, u8* green, u8* blue, u32 color) {
 
 namespace Render {
 
+struct Rectangle {
+    union {
+        struct {
+            Vector2 nw;
+            Vector2 ne;
+            Vector2 se;
+            Vector2 sw;
+        };
+        Vector2 points[4];
+    };
+    u32 border_color;
+};
+
+struct Line {
+    Vector2 start;
+    Vector2 end;
+    u32 color;
+};
+
+struct Circle {
+    Vector2 center;
+    f32 radius;
+};
+
+typedef Vector2i Crosshair;
+
+
+
 void draw_weird_gradient(Offscreen_Bitmap_Buffer* bitmapBuffer, int xOffset, int yOffset) {
     u8* row = (u8*) bitmapBuffer->memory;
     for (int y = 0; y < bitmapBuffer->height; ++y) {
@@ -420,6 +448,31 @@ void draw_text(Offscreen_Bitmap_Buffer* bitmapBuffer, Font* font, int x, int y, 
         xOffset += font->cols_per_char + 1;
     }
 }
+
+enum Background {
+    BACKGROUND_BLANK    = 0,
+    BACKGROUND_GRADIENT = 1,
+    BACKGROUND_BANDS    = 2,
+};
+
+struct State {
+    int xOffset;
+    int yOffset;
+    f32 rotationAngle;
+    bool mouseDragging;
+    Rectangle* rectangles;
+    int rectanglesCount;
+    Line* lines;
+    int linesCount;
+    Circle* circles;
+    int circlesCount;
+    Background background;
+    int xBackgroundOffset;
+    int yBackgroundOffset;
+    u8 blankBackgroundColorFactor;
+    bool textVisible;
+    Font font;
+};
 
 void update(Memory* memory, Input* input, Offscreen_Bitmap_Buffer* bitmapBuffer) {
 

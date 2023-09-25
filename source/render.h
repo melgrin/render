@@ -23,30 +23,6 @@ struct Vector2i {
     int y;
 };
 
-struct Rectangle {
-    union {
-        struct {
-            Vector2 nw;
-            Vector2 ne;
-            Vector2 se;
-            Vector2 sw;
-        };
-        Vector2 points[4];
-    };
-    u32 border_color;
-};
-
-struct Line {
-    Vector2 start;
-    Vector2 end;
-    u32 color;
-};
-
-struct Circle {
-    Vector2 center;
-    f32 radius;
-};
-
 struct Button_State {
     //int halfTransistionCount; // the number of ups+downs in a frame
     bool endedDown; // whether the button was down at the end of the frame
@@ -106,31 +82,6 @@ struct Mouse_Input {
     Mouse_Wheel wheel;
 };
 
-enum Background {
-    BACKGROUND_BLANK    = 0,
-    BACKGROUND_GRADIENT = 1,
-    BACKGROUND_BANDS    = 2,
-};
-
-struct State {
-    int xOffset;
-    int yOffset;
-    f32 rotationAngle;
-    bool mouseDragging;
-    Rectangle* rectangles;
-    int rectanglesCount;
-    Line* lines;
-    int linesCount;
-    Circle* circles;
-    int circlesCount;
-    Background background;
-    int xBackgroundOffset;
-    int yBackgroundOffset;
-    u8 blankBackgroundColorFactor;
-    bool textVisible;
-    Font font;
-};
-
 struct Memory {
     bool  isInitialized;
     u64   permanentStorageSize;
@@ -138,8 +89,6 @@ struct Memory {
     u64   transientStorageSize;
     void* transientStorage; // should be cleared to zero at startup (For Win32, VirtualAlloc does this)
 };
-
-typedef Vector2i Crosshair;
 
 struct Input {
     Keyboard_Input keyboard;
