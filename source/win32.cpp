@@ -1,15 +1,25 @@
 #include <stdint.h>
 #include <math.h>
 #include "common.h"
-#include "render.cpp"
+#include "render.h"
 
 #include <windows.h>
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
 #include <stdio.h>
 
-//static bool g_refresh = false; // XXX
+static bool g_running;
+static char g_last_error_text[1024];
 
 namespace Platform {
+
+void report_error(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vsnprintf(g_last_error_text, sizeof(g_last_error_text), format, args);
+    va_end(args);
+
+    g_running = false;
+}
 
 #ifdef RENDERDEV_DEBUG
 //XXX Warning: this is always behind by one message, at least in remedybg. Now I'm mainly just putting relevant info in the window title (SetWindowText).
@@ -29,13 +39,14 @@ void DEBUG_display(const char* format, ...) {
     vsnprintf(DEBUG_window_text, sizeof(DEBUG_window_text), format, args);
     va_end(args);
 }
+#else
+void DEBUG_printf(const char* format, ...) {}
+void DEBUG_display(const char* format, ...) {}
 #endif
 
 }
 
 namespace Win32 {
-
-bool g_running;
 
 //void Win32::process_XInput_digital_button(DWORD xinputButtonState, DWORD buttonBit, Render::Button_State* oldState, Render::Button_State* newState) {
 //    newState->endedDown = (xinputButtonState & buttonBit) != 0;
@@ -164,6 +175,7 @@ bool process_pending_messages(Render::Input* input) {
                     else if (key == 'Q') { ProcessKBMessage(Render::KEYBOARD_BUTTON_Q); }
                     else if (key == 'E') { ProcessKBMessage(Render::KEYBOARD_BUTTON_E); }
                     else if (key == 'T') { ProcessKBMessage(Render::KEYBOARD_BUTTON_T); }
+                    else if (key == 'U') { ProcessKBMessage(Render::KEYBOARD_BUTTON_U); }
                     else if (key == '1') { ProcessKBMessage(Render::KEYBOARD_BUTTON_1); }
                     else if (key == '2') { ProcessKBMessage(Render::KEYBOARD_BUTTON_2); }
                     else if (key == '3') { ProcessKBMessage(Render::KEYBOARD_BUTTON_3); }
@@ -393,9 +405,9 @@ int CALLBACK WinMain(
                 s64 lastCounter = Win32::get_wall_clock();
                 u64 lastCycleCount = __rdtsc();
 
-                Win32::g_running = true;
+                g_running = true;
 
-                while (Win32::g_running) {
+                while (g_running) {
                     Render::Keyboard_Input* oldKeyboardInput = &oldInput->keyboard;
                     Render::Keyboard_Input* newKeyboardInput = &newInput->keyboard;
                     *newKeyboardInput = {};
@@ -413,9 +425,8 @@ int CALLBACK WinMain(
                     }
                     newMouseInput->cursor = oldMouseInput->cursor;
 
-                    //g_refresh = false;
                     if (!Win32::process_pending_messages(newInput)) {
-                        Win32::g_running = false;
+                        g_running = false;
                     }
 
                     for (int i = 0; i < arrayCount(newKeyboardInput->buttons); ++i) {
@@ -449,11 +460,7 @@ int CALLBACK WinMain(
                     bitmapBuffer.height = Win32::g_bitmap.height;
                     bitmapBuffer.pitch  = Win32::g_bitmap.pitch;
 
-                    //if (g_refresh) {
-                    //    OutputDebugStringA("refresh");
-                    //}
                     Render::update(&memory, newInput, &bitmapBuffer);
-                    //OutputDebugStringA("\n");
 
                     // enforce frame rate
                     {
@@ -519,10 +526,12 @@ int CALLBACK WinMain(
                     lastCycleCount  = endCycleCount;
 
                 }
+                if (g_last_error_text[0]) {
+                    MessageBox(window, g_last_error_text, NULL, MB_OK);
+                }
             } else {
                 // TODO error VirtualAlloc failed
             }
-
         } else {
             // TODO error
         }

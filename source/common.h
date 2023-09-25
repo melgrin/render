@@ -28,12 +28,6 @@ typedef double f64;
 #endif
 #endif
 
-namespace Platform {
-    void report_error(const char* format, ...);
-    void DEBUG_printf(const char* format, ...);
-    void DEBUG_display(const char* format, ...);
-}
-
 #define arrayCount(X) (sizeof(X)/sizeof((X)[0]))
 
 #define swap(A, B) do { \
